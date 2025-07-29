@@ -104,31 +104,6 @@ Função principal que coordena todo o processo:
    - Exibe os top recomendações para ambas as abordagens
    - Formata os resultados para melhor legibilidade
 
-## Estrutura do Código
-
-
-Como Executar
-Coloque os arquivos de dados nas pastas bases/:
-
-relatorio_produtos.xlsx
-
-relatorio_notas.xlsx
-
-Saída Esperada
-O programa gera:
-
-Logs do processo no console
-
-Resultados formatados das recomendações:
-
-Tabela de produtos substitutos
-
-Lista de produtos para cross-selling (top 5 associações)
-
-Personalização
-Para testar com outros produtos, altere a variável cod_produto (linha 23)
-
-
 # EstoqueCleaner
 
 ## Visão Geral
