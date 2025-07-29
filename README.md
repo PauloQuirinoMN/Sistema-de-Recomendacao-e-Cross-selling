@@ -6,8 +6,10 @@ O **Sistema de Recomendação** é uma solução automatizada que processa dados
 1. **Recomendação de Substitutos** → Sugere produtos similares para substituição caso o mesmo não esteja disponível em estoque.  
 2. **Recomendação por Cross-Selling** → Identifica produtos frequentemente comprados juntos.  
 
-Seu objetivo é **aumentar e melhorar o ticket de vendas** ao oferecer sugestões relevantes baseadas em dados históricos e características dos produtos.  
+Seu objetivo é **aumentar e melhorar o ticket de vendas** ao oferecer sugestões relevantes baseadas em dados históricos e características dos produtos. 
 
+
+![alt text](png_recomenda.png)
 ---  
 
 ## **O Que o Sistema Faz?**  

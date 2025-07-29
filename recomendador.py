@@ -56,11 +56,11 @@ class RecomendadorCrossSelling:
 
             resultados.append({
                 'Antecedente': ant,
-                # 'Descrição Antecedente': info_ant['Descrição do produto'],
+                'Descrição Antecedente': info_ant['Descrição do produto'],
                 'Consequente': cons,
                 'Descrição Consequente': info_cons['Descrição do produto'],
-                '% de Vendas com os Dois Produtos': f"{r['support']*100:.2f}%",
-                'Chance de Compra Junto (%)': f"{r['confidence']*100:.2f}%",
+                'Aparece junto (%)': f"{r['support']*100:.2f}%",
+                'Chance de comprar junto (%)': f"{r['confidence']*100:.2f}%",
             })
 
         return pd.DataFrame(resultados)
