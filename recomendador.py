@@ -21,7 +21,8 @@ class RecomendadorCrossSelling:
         if frequent_itemsets.empty:
             return pd.DataFrame()
 
-        rules = association_rules(frequent_itemsets, metric="lift", min_threshold=min_threshold)
+
+        rules = association_rules(frequent_itemsets, metric='lift', min_threshold=min_threshold)
         produto_str = str(cod_produto)
 
         regras_produto = rules[
