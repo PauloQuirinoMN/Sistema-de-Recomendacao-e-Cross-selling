@@ -224,7 +224,7 @@ Executa o pipeline completo de limpeza:
         int Quantidade
     }
 
-    # Documentação da Classe `BasePreparador`
+# Documentação da Classe `BasePreparador`
 
 ## Visão Geral
 A classe `BasePreparador` é responsável pela integração e preparação final dos dados, combinando as bases de notas fiscais e estoque em um único dataset analítico pronto para alimentar o sistema de recomendação.
