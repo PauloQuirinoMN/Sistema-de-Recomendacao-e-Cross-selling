@@ -56,7 +56,7 @@ class RecomendadorCrossSelling:
 
             resultados.append({
                 'Antecedente': ant,
-                'Descrição Antecedente': info_ant['Descrição do produto'],
+                # 'Descrição Antecedente': info_ant['Descrição do produto'],
                 'Consequente': cons,
                 'Descrição Consequente': info_cons['Descrição do produto'],
                 '% de Vendas com os Dois Produtos': f"{r['support']*100:.2f}%",

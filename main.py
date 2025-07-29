@@ -29,7 +29,7 @@ def main():
     print(f"[INFO] Base final possui {len(df_modelo)} registros válidos\n")
 
     # 3. Recomendação de Substitutos
-    cod_produto = 23649  # 🔁 Altere aqui o produto para testar
+    cod_produto = 33055  # 🔁 Altere aqui o produto para testar
     print(f"🔍 Produto pesquisado: {cod_produto} (Substituição)\n")
 
     recomendador = RecomendadorSubstituto(df_modelo)
@@ -48,7 +48,7 @@ def main():
     else:
         df_formatado = cross.formatar_regras(regras)
         print("🤝 Produtos frequentemente comprados juntos:")
-        print(df_formatado.head(5))
+        print(df_formatado.head(6))
 
 if __name__ == "__main__":
     main()
