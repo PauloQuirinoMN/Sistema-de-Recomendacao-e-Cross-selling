@@ -9,7 +9,7 @@ O **Sistema de Recomendação** é uma solução automatizada que processa dados
 Seu objetivo é **aumentar e melhorar o ticket de vendas** ao oferecer sugestões relevantes baseadas em dados históricos e características dos produtos. 
 
 
-![Texto alternativo](C:\Users\Paulo Neto\Desktop\Sistema-de-Recomendacao-e-Cross-selling\png_recomenda.png)
+![Texto alternativo](Sistema-de-Recomendacao-e-Cross-selling\png_recomenda.png)
 ---  
 
 ## **O Que o Sistema Faz?**  
