@@ -105,48 +105,28 @@ Função principal que coordena todo o processo:
    - Formata os resultados para melhor legibilidade
 
 ## Estrutura do Código
-```python
-def main():
-    # 1. Limpeza de bases
-    estoque_raw = pd.read_excel(...)
-    df_estoque_limpo = EstoqueCleaner().clean(estoque_raw)
-    
-    notas_raw = pd.read_excel(...)
-    df_notas_limpa = NotasCleaner().clean(notas_raw)
-
-    # 2. Preparação da base final
-    preparador = BasePreparador()
-    df_modelo = preparador.preparar_base(...)
-
-    # 3. Recomendação de substitutos
-    recomendador = RecomendadorSubstituto(df_modelo)
-    resultado_sub = recomendador.recomendar(cod_produto)
-
-    # 4. Recomendação por cross-selling
-    cross = RecomendadorCrossSelling(df_modelo)
-    regras = cross.gerar_regras(...)
 
 
-    Como Executar
-    Coloque os arquivos de dados nas pastas bases/:
+Como Executar
+Coloque os arquivos de dados nas pastas bases/:
 
-    relatorio_produtos.xlsx
+relatorio_produtos.xlsx
 
-    relatorio_notas.xlsx
+relatorio_notas.xlsx
 
-    Saída Esperada
-    O programa gera:
+Saída Esperada
+O programa gera:
 
-    Logs do processo no console
+Logs do processo no console
 
-    Resultados formatados das recomendações:
+Resultados formatados das recomendações:
 
-    Tabela de produtos substitutos
+Tabela de produtos substitutos
 
-    Lista de produtos para cross-selling (top 5 associações)
+Lista de produtos para cross-selling (top 5 associações)
 
-    Personalização
-    Para testar com outros produtos, altere a variável cod_produto (linha 23)
+Personalização
+Para testar com outros produtos, altere a variável cod_produto (linha 23)
 
 
 # EstoqueCleaner
