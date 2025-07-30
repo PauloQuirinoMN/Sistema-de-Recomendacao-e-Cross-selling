@@ -322,14 +322,14 @@ Retorna um `pd.DataFrame` unificado pronto para análise.
 ⚠️ A classe mantém uma cópia interna do último resultado processado em `self.df_completo` para possível recuperação sem reprocessamento.
 
 ## Exemplo de Uso
-```python
+
 preparador = BasePreparador()
 df_analise = preparador.preparar_base(df_estoque_limpo, df_notas_limpas)
 
 
-# Documentação da Classe `RecomendadorSubstituto`
+## Documentação da Classe `RecomendadorSubstituto`
 
-## Visão Geral
+### Visão Geral
 A classe `RecomendadorSubstituto` é responsável por identificar e recomendar produtos alternativos quando o item desejado está indisponível no estoque, utilizando critérios de similaridade para garantir recomendações relevantes.
 
 ## Funcionalidades Principais
@@ -351,9 +351,9 @@ A classe `RecomendadorSubstituto` é responsável por identificar e recomendar p
 - Retorna os N produtos mais similares (padrão: 5)
 
 
-# Documentação da Classe `RecomendadorCrossSelling`
+## Documentação da Classe `RecomendadorCrossSelling`
 
-## Visão Geral
+### Visão Geral
 A classe `RecomendadorCrossSelling` implementa o algoritmo Apriori para identificar associações entre produtos frequentemente comprados juntos, gerando recomendações de cross-selling baseadas em regras de associação.
 
 ## Funcionalidades Principales
@@ -375,7 +375,7 @@ A classe `RecomendadorCrossSelling` implementa o algoritmo Apriori para identifi
 
 ### def gerar_regras(self, cod_produto: int, min_support=0.005, min_threshold=1.0, max_len=2):
 
-# Documentação Técnica - Parâmetros para Geração de Regras de Associação
+## - Parâmetros para Geração de Regras de Associação
 
 ## Visão Geral
 Este documento descreve os parâmetros padrão e as decisões técnicas para a função `gerar_regras()` do sistema de recomendação.
