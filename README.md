@@ -428,43 +428,42 @@ A classe `RecomendadorCrossSelling` implementa o algoritmo Apriori para identifi
 ## Visão Geral
 Este documento descreve os parâmetros padrão e as decisões técnicas para a função `gerar_regras()` do sistema de recomendação.
 
-## 📌 Parâmetros Padrão
+# Parâmetros para Geração de Regras de Associação
 
-1. min_support (Suporte Mínimo)
-Valor Padrão
-0.005 (0.5%)
+## min_support (Suporte Mínimo)
 
-Justificativa
-Base de Dados: Considerando 223.102 registros, 0.5% ≈ 1.115 transações
+**Valor Padrão**: 0,005 (0,5%)
 
-Análise Empírica:
+**Justificativa**  
+Base de Dados: considerando 223.102 registros, 0,5% ≈ 1.115 transações
 
-Valores < 0.005 geram muitas regras irrelevantes (ruído)
+**Análise Empírica**:
+- Valores < 0,005 geram muitas regras irrelevantes (ruído)
+- Valores > 0,01 removem cópias válidas de produtos nicho
 
-Valores > 0.01 removem combinações válidas de produtos nicho
+**Trade-off**  
 
-Trade-off
-Valor	Regras Geradas	Precisão
-0.001	+1.823	Baixa
-0.005	587	Balanceada
-0.01	89	Alta
-2. min_threshold (Limiar Mínimo)
-Valor Padrão
-1.0 (Lift mínimo)
+| Valor  | Regras Geradas | Precisão    |
+|--------|----------------|-------------|
+| 0,001  | +1.823         | Baixa       |
+| 0,005  | 587            | Balanceada  |
+| 0,01   | 89             | Alta        |
 
-Escala de Interpretação
-1.0 - 1.5: Associação fraca
+## min_threshold (Limiar Mínimo)
 
-1.5 - 3.0: Ideal para cross-selling
+**Valor Padrão**: 1,0 (Lift mínimo)
 
-> 3.0: Combinações muito específicas
+**Escala de Interpretação**:
+- 1.0 - 1.5: Associação fraca
+- 1,5 - 3,0: Ideal para vendas cruzadas
+- > 3.0: Combinações muito específicas
 
-Exemplo
-python
-# Cálculo do Lift:
-# support(A∪B) = 0.006
-# support(A) = 0.01 → confidence = 0.6
-# support(B) = 0.02 → lift = (0.006)/(0.01*0.02) = 3.0
+**Exemplo**:
+
+#### Cálculo do Lift:
+#### suporte(A∪B) = 0,006
+#### suporte(A) = 0,01 → confiança = 0,6
+#### suporte(B) = 0,02 → elevação = (0,006)/(0,01*0,02) = 3,0
 3. max_len (Tamanho Máximo)
 Valor Padrão
 2 (Pares de produtos)
