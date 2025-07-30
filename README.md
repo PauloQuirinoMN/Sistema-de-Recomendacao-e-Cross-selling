@@ -340,64 +340,74 @@ A classe `RecomendadorSubstituto` é responsável por identificar e recomendar p
 
 ## Método Principal
 
-### `recomendar(cod_produto_pesquisado: int, n_recomendacoes: int = 5)`
+# Método preparar_base
+# Documentação do Método `preparar_base`
 
-def recomendar(self, cod_produto_pesquisado: int, n_recomendacoes: int = 5) -> Union[str, pd.DataFrame]
+## Descrição
+Prepara a base unificada para análise combinando dados de estoque e notas fiscais.
 
-Parâmetros:
+## Parâmetros
 
-cod_produto_pesquisado: Código do produto desejado
+| Nome         | Tipo           | Descrição                                  |
+|--------------|----------------|--------------------------------------------|
+| `df_estoque` | `pd.DataFrame` | DataFrame já processado pelo `EstoqueCleaner` |
+| `df_notas`   | `pd.DataFrame` | DataFrame já processado pelo `NotasCleaner`   |
 
-n_recomendacoes: Quantidade de recomendações a retornar (opcional, padrão=5)
+## Retorno
+Retorna um `pd.DataFrame` unificado pronto para análise.
 
-Retorno:
+## Fluxo de Processamento
+1. Mescla as bases via junção interna
+2. Calcula métricas financeiras
+3. Aplica transformações de tipo
+4. Executa filtros de qualidade
+5. Retorna base consolidada
 
-DataFrame com produtos recomendados OU
+## Estrutura da Saída
 
-Mensagem de status em caso de:
+| Coluna                | Tipo        | Descrição                                  | Formato/Exemplo       |
+|-----------------------|-------------|--------------------------------------------|-----------------------|
+| Número nota fiscal    | int/str     | Identificador da nota fiscal               | "NF123456"            |
+| Data da venda         | datetime    | Data da transação                          | "2023-01-15"          |
+| Código do produto     | int         | SKU do produto                             | 789123                |
+| Descrição do produto  | str         | Nome do item                               | "Notebook Dell"       |
+| Quantidade do produto | int         | Unidades vendidas                          | 2                     |
+| Valor unitário        | float       | Preço de venda unitário                    | 4599.99               |
+| Preço de custo        | float       | Custo unitário                             | 3200.00               |
+| Margem bruta          | float       | Diferença absoluta (R$)                    | 1399.99               |
+| Margem %              | float       | Percentual de margem                       | 0.30 (30%)            |
+| Quantidade estoque    | int         | Disponível em estoque                      | 15                    |
+| Categoria             | str         | Categoria do produto                       | "Eletrônicos"         |
+| Marca                 | str         | Fabricante/fornecedor                      | "Dell"                |
 
-Produto não encontrado
+## Validações Implementadas
 
-Produto disponível
+### Consistência Temporal
+- Validação do formato correto de datas
+- Verificação de datas futuras/inválidas
 
-Nenhum substituto encontrado
+### Integridade Financeira
+- Garante que preço de custo ≤ valor de venda
+- Margens dentro de limites econômicos (0-100%)
+- Arredondamento correto de valores monetários (2 decimais)
 
-Quando há recomendações, retorna DataFrame com:
+### Completude dos Dados
+- Campos obrigatórios sem valores nulos:
+  - Código do produto
+  - Descrição
+  - Valores monetários
+  - Quantidades
+- Relacionamentos válidos entre tabelas:
+  - Todos os produtos nas notas existem no estoque
+  - Consistência entre valores agregados
 
-Coluna	Tipo	Descrição
-Código produto	int	Código do produto substituto
-Descrição do produto	str	Nome/descrição do produto
-Valor unitário	float	Preço de venda (R$)
-Margem %	float	Margem percentual (0-1)
-Marca	str	Fabricante/fornecedor
-Quantidade estoque	int	Unidades disponíveis
+## Observação
+⚠️ A classe mantém uma cópia interna do último resultado processado em `self.df_completo` para possível recuperação sem reprocessamento.
 
-Mensagens de Retorno Possíveis
-❌ Produto não encontrado na base.
-
-✅ Produto está disponível em estoque. Recomendação não necessária.
-
-⚠️ Nenhum substituto disponível no momento.
-
-Critérios de Similaridade
-Prioridade 1: Proximidade de preço
-
-Calcula diferença absoluta entre valores unitários
-
-Prioridade 2: Proximidade de margem
-
-Calcula diferença absoluta entre margens percentuais
-
-Desempate: Ordem natural do DataFrame
-
-Observações Importantes
-Requer base de dados pré-processada (com colunas de margem calculadas)
-
-Considera apenas produtos com Quantidade estoque > 0
-
-Mantém relação 1:1 entre código e produto (sem duplicatas)
-
-Não modifica a base de dados original (apenas consulta)
+## Exemplo de Uso
+```python
+preparador = BasePreparador()
+df_analise = preparador.preparar_base(df_estoque_limpo, df_notas_limpas)
 
 # Documentação da Classe `RecomendadorCrossSelling`
 
