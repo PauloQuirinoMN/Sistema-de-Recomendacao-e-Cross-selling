@@ -46,7 +46,8 @@ Seu objetivo é **aumentar e melhorar o ticket de vendas** ao oferecer sugestõe
 
 ## **Por Que o Sistema Faz Isso?**  
 ### **Problemas Resolvidos**  
-✔ **Melhora a disponibilidade de produtos** → Se um item está em falta, o cliente recebe alternativas similares.  
+✔ **Melhora a disponibilidade de produtos** → Se um item está em falta, o cliente recebe alternativas para manter um fluxo. 
+✔ **Melhora a disponibilidade de produtos** → Mesmo se um item estiver em estoque, o cliente recebe alternativas similares.   
 ✔ **Aumenta o ticket médio** → Sugere combinações de produtos que incentivam compras adicionais.  
 ✔ **Automatiza decisões estratégicas** → Baseia recomendações em dados reais, não em suposições.  
 
@@ -61,7 +62,7 @@ Seu objetivo é **aumentar e melhorar o ticket de vendas** ao oferecer sugestõe
 - **Linguagem**: Python  
 - **Bibliotecas**:  
   - `pandas` → Manipulação de dados.  
-  - `mlxtend` → Algoritmo Apriori para cross-selling.  
+  - `mlxtend` → Algoritmo Apriori para cross-selling, association_rules definição das regras, TransactionEncoder para o pré-processamento
 - **Abordagens**:  
   - **Limpeza de dados** → Filtragem e tratamento de missing values.  
   - **Análise de similaridade** → Comparação de atributos para substitutos.  
@@ -256,90 +257,6 @@ A classe `BasePreparador` é responsável pela integração e preparação final
 
 ## Método Principal
 
-### `preparar_base(df_estoque, df_notas)`
-
-def preparar_base(self, df_estoque: pd.DataFrame, df_notas: pd.DataFrame) -> pd.DataFrame
-
-Parâmetros:
-
-df_estoque: DataFrame já processado pela EstoqueCleaner
-
-df_notas: DataFrame já processado pela NotasCleaner
-
-Retorno:
-
-DataFrame unificado pronto para análise
-
-Fluxo:
-
-Mescla as bases via inner join
-
-Calcula métricas financeiras
-
-Aplica transformações de tipo
-
-Executa filtros de qualidade
-
-Retorna base consolidada
-
-Estrutura da Saída
-Colunas Principais	Tipo	Descrição
-Numero nota fiscal	int/str	Identificador da nota fiscal
-Data da venda	datetime	Data da transação
-Código produto	int	SKU do produto
-Descrição do produto	str	Nome do item
-Quantidade do produto	int	Unidades vendidas
-Valor unitário	float	Preço de venda unitário (2 decimais)
-Preço de custo	float	Custo unitário (2 decimais)
-Margem bruta	float	Diferença absoluta (R$)
-Margem %	float	Percentual de margem (0-1)
-Quantidade estoque	int	Disponível em estoque
-Categoria	str	Categoria do produto
-Marca	str	Fabricante/fornecedor
-
-Validações Implementadas
-Consistência temporal: Formato correto de datas
-
-Integridade financeira:
-
-Nenhum preço de custo > valor de venda
-
-Margens dentro de limites razoáveis
-
-Completude dos dados:
-
-Sem valores nulos em campos críticos
-
-Relacionamentos válidos entre tabelas
-
-Nota: A classe mantém uma cópia interna do último resultado processado em self.df_completo para possível recuperação
-
-
-# Documentação da Classe `RecomendadorSubstituto`
-
-## Visão Geral
-A classe `RecomendadorSubstituto` é responsável por identificar e recomendar produtos alternativos quando o item desejado está indisponível no estoque, utilizando critérios de similaridade para garantir recomendações relevantes.
-
-## Funcionalidades Principais
-
-### 1. Verificação de Disponibilidade
-- Checa se o produto solicitado existe na base de dados
-- Verifica a quantidade em estoque do produto
-
-### 2. Busca de Substitutos
-- Encontra produtos da mesma categoria com estoque positivo
-- Remove duplicatas para variedade de recomendações
-
-### 3. Cálculo de Similaridade
-- **Similaridade de preço**: Diferença absoluta entre valores unitários
-- **Similaridade de margem**: Diferença absoluta entre margens percentuais
-
-### 4. Ranqueamento e Seleção
-- Ordena produtos por similaridade (preço + margem)
-- Retorna os N produtos mais similares (padrão: 5)
-
-## Método Principal
-
 # Método preparar_base
 # Documentação do Método `preparar_base`
 
@@ -408,6 +325,31 @@ Retorna um `pd.DataFrame` unificado pronto para análise.
 ```python
 preparador = BasePreparador()
 df_analise = preparador.preparar_base(df_estoque_limpo, df_notas_limpas)
+
+
+# Documentação da Classe `RecomendadorSubstituto`
+
+## Visão Geral
+A classe `RecomendadorSubstituto` é responsável por identificar e recomendar produtos alternativos quando o item desejado está indisponível no estoque, utilizando critérios de similaridade para garantir recomendações relevantes.
+
+## Funcionalidades Principais
+
+### 1. Verificação de Disponibilidade
+- Checa se o produto solicitado existe na base de dados
+- Verifica a quantidade em estoque do produto
+
+### 2. Busca de Substitutos
+- Encontra produtos da mesma categoria com estoque positivo
+- Remove duplicatas para variedade de recomendações
+
+### 3. Cálculo de Similaridade
+- **Similaridade de preço**: Diferença absoluta entre valores unitários
+- **Similaridade de margem**: Diferença absoluta entre margens percentuais
+
+### 4. Ranqueamento e Seleção
+- Ordena produtos por similaridade (preço + margem)
+- Retorna os N produtos mais similares (padrão: 5)
+
 
 # Documentação da Classe `RecomendadorCrossSelling`
 
