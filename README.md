@@ -456,7 +456,7 @@ Base de Dados: considerando 223.102 registros, 0,5% ≈ 1.115 transações
 **Escala de Interpretação**:
 - 1.0 - 1.5: Associação fraca
 - 1,5 - 3,0: Ideal para vendas cruzadas
-- > 3.0: Combinações muito específicas
+- 3.0: Combinações muito específicas
 
 **Exemplo**:
 
@@ -464,6 +464,7 @@ Base de Dados: considerando 223.102 registros, 0,5% ≈ 1.115 transações
 #### suporte(A∪B) = 0,006
 #### suporte(A) = 0,01 → confiança = 0,6
 #### suporte(B) = 0,02 → elevação = (0,006)/(0,01*0,02) = 3,0
+
 3. max_len (Tamanho Máximo)
 Valor Padrão
 2 (Pares de produtos)
