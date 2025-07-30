@@ -29,7 +29,8 @@ def main():
     print(f"[INFO] Base final possui {len(df_modelo)} registros válidos\n")
 
     # 3. Recomendação de Substitutos
-    cod_produto = 29333  # 🔁 Altere aqui o produto para testar
+    cod_produto = 31211
+    # 🔁 Altere aqui o produto para testar
     print(f"🔍 Produto pesquisado: {cod_produto} (Substituição)\n")
 
     recomendador = RecomendadorSubstituto(df_modelo)

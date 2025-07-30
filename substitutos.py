@@ -2,7 +2,7 @@ import pandas as pd
 
 class RecomendadorSubstituto:
     def __init__(self, df: pd.DataFrame):
-        self.df = df.drop_duplicates(subset='Código produto')  # Remove duplicatas
+        self.df = df.drop_duplicates(subset='Código produto')  # Remove duplicatas pelo código do produto.
 
     def recomendar(self, cod_produto_pesquisado: int, n_recomendacoes: int = 6):
         """

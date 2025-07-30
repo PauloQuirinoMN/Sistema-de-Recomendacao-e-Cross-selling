@@ -1,21 +1,11 @@
-# notas.py
-
 import pandas as pd
 
 class NotasCleaner:
-    def __init__(self, logger=None):
-        self.logger = logger
-
-    def _log(self, message, level="info"):
-        if self.logger:
-            getattr(self.logger, level)(message)
-        else:
-            print(f"[{level.upper()}] {message}")
+    def __init__(self):
+        pass  
 
     def clean(self, df: pd.DataFrame) -> pd.DataFrame:
         try:
-            self._log("Iniciando limpeza da base de notas fiscais")
-
             # 1. Remover registros com quantidades <= 0 ou valores unitários zerados
             notas_com_problemas = set()
 
@@ -51,9 +41,7 @@ class NotasCleaner:
             ]
             df_limpo = df_limpo[colunas_finais]
 
-            self._log("Limpeza da base de notas concluída com sucesso")
             return df_limpo
 
         except Exception as e:
-            self._log(f"Erro ao limpar base de notas: {str(e)}", level="error")
-            raise
+            raise  # Simplesmente propaga a exceção sem tratamento de log

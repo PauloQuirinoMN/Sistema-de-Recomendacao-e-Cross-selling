@@ -14,6 +14,13 @@ class BasePreparador:
             how='inner'
         )
 
+        # Remover notas com preço de custo nulo e removendo os valores zerados
+        df = df[~df["Preço de custo"].isna()]
+        df = df[df["Preço de custo"] != 0]
+
+        # Remover notas com valor unitário zerado
+        df = df[df["Valor unitário"] != 0]
+
         # Cálculo de margem e markup
         df["Margem bruta"] = (df["Valor unitário"] - df["Preço de custo"]).round(2)
         df["Margem %"] = (df["Margem bruta"] / df["Valor unitário"]).round(2)
@@ -25,12 +32,6 @@ class BasePreparador:
         df["Código da categoria"] = df["Código da categoria"].astype(int)
         df["Código da Marca"] = df["Código da Marca"].astype(int)
         df["Quantidade estoque"] = df["Quantidade estoque"].astype(int)
-
-        # Remover notas com preço de custo nulo
-        df = df[~df["Preço de custo"].isna()]
-
-        # Remover notas com valor unitário zerado
-        df = df[df["Valor unitário"] != 0]
 
         # Recalcular valores
         df["Valor total produto"] = df["Quantidade do produto"] * df["Valor unitário"]
