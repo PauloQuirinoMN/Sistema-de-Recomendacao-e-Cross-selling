@@ -8,7 +8,7 @@ class RecomendadorCrossSelling:
     def __init__(self, df: pd.DataFrame):
         self.df = df
 
-    def gerar_regras(self, cod_produto: int, min_support=0.01, min_threshold=1.0, max_len=3):
+    def gerar_regras(self, cod_produto: int, min_support=0.005, min_threshold=1.0, max_len=2):
         notas_com_produto = self.df[self.df['Código produto'] == cod_produto]['Numero nota fiscal'].unique()
         df_filtrado = self.df[self.df['Numero nota fiscal'].isin(notas_com_produto)]
         transacoes = df_filtrado.groupby('Numero nota fiscal')['Código produto'].apply(list)
