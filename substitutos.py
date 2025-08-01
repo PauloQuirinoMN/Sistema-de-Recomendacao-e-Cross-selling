@@ -12,7 +12,8 @@ class RecomendadorSubstituto:
             return self._recomendar_por_categoria(codigo_pesquisado, n_recomendacoes)
         else:
             print(f"⚠️ Código {codigo_pesquisado} não corresponde a produto ou categoria válida.")
-            return self._recomendar_alternativas(n_recomendacoes)
+            print("\n📦 Resultado da Recomendação de Substitutos:")
+            return self._formatar_resultado(None, self._recomendar_alternativas(n_recomendacoes))
     
     def _recomendar_por_produto(self, cod_produto: int, n: int):
         produto_base = self.df[self.df['Código produto'] == cod_produto].iloc[0]
@@ -60,8 +61,8 @@ class RecomendadorSubstituto:
         """Formata a saída no padrão consistente"""
         if produto_base is not None:
             print(f"\n🔄 Produto pesquisado: {produto_base['Código produto']} ({produto_base['Descrição do produto']})")
-        
-        print("\n📦 Resultado da Recomendação de Substitutos:")
+        else:
+            print("\n📦 Resultado da Recomendação de Substitutos:")
         
         cols = ['Código produto', 'Descrição do produto', 'Valor unitário', 
                 'Margem %', 'Quantidade estoque', 'Categoria']
