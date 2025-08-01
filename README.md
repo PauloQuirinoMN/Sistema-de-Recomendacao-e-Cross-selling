@@ -336,7 +336,11 @@ A classe `RecomendadorSubstituto` é responsável por identificar e recomendar p
 
 ### 1. Verificação de Disponibilidade
 - Checa se o produto solicitado existe na base de dados
-- Verifica a quantidade em estoque do produto
+- se o código for de algum produto retorna recomendações baseados no produto
+- se o código não pertence a nenhuem produto na base checa se o código é de alguma categoria
+- se a categoria for encontrada recomenda baseado em semelhantes da mesma categoria
+- Verificando sempre a quantidade em estoque do produto
+- caso o código não seja de produto nem de categoria recomenda aleatórios
 
 ### 2. Busca de Substitutos
 - Encontra produtos da mesma categoria com estoque positivo
