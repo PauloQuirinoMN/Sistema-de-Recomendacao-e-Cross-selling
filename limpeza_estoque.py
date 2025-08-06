@@ -9,7 +9,6 @@ class EstoqueCleaner:
 
     def clean(self, df: pd.DataFrame) -> pd.DataFrame:
         print("[INFO] Iniciando limpeza da base de estoque...")
-
         # Tratamento de valores negativos e nulos em estoque
         df.loc[df["Quantidade estoque"] < 0, "Quantidade estoque"] = 0
         df["Quantidade estoque"] = df["Quantidade estoque"].fillna(0)
