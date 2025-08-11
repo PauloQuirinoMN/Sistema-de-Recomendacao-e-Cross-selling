@@ -1,0 +1,145 @@
+import psycopg2
+from psycopg2.extras import execute_values
+from datetime import datetime
+import pandas as pd
+import numpy as np
+
+def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
+    # Obter código pesquisado
+    if df_substitutos.empty:
+        print("[INFO] DataFrame de substitutos vazio. Nenhum registro será inserido.")
+        return
+
+    codigo_pesquisado = str(df_substitutos.iloc[0]["Código pesquisado"])
+
+    # Verificar se código está no df_modelo (produtos ou categorias)
+    codigo_no_produto = codigo_pesquisado in df_modelo["Código produto"].astype(str).values
+    codigo_na_categoria = codigo_pesquisado in df_modelo["Categoria"].astype(str).values
+
+    if not (codigo_no_produto or codigo_na_categoria):
+        print(f"[INFO] Código '{codigo_pesquisado}' não encontrado em produtos nem categorias no df_modelo. Nenhum registro será inserido.")
+        return
+
+    # Conexão e criação das tabelas com tratamento de erro
+    try:
+        conn = psycopg2.connect(
+            host="localhost",
+            dbname="bd_recomenda",
+            user="postgres",
+            password="recomenda",
+            port=5432
+        )
+        cur = conn.cursor()
+    except Exception as e:
+        print(f"[ERRO] Falha ao conectar ao banco de dados: {e}")
+        return
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS produtos_substitutos (
+        id SERIAL PRIMARY KEY,
+        produto_pesquisado_cod VARCHAR,
+        produto_pesquisado_des VARCHAR,
+        produto_recomendado_cod VARCHAR,
+        produto_recomendado_des VARCHAR,
+        valor_unitario NUMERIC,
+        margem_percentual NUMERIC,
+        estoque INTEGER,
+        categoria VARCHAR,
+        data_insersao TIMESTAMP
+    );
+    """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS produtos_associados (
+        id SERIAL PRIMARY KEY,
+        produto_pesquisado_cod VARCHAR,
+        produto_pesquisado_des VARCHAR,
+        produto_associado_cod VARCHAR,
+        produto_associado_des VARCHAR,
+        suporte NUMERIC,
+        confianca NUMERIC,
+        data_insersao TIMESTAMP
+    );
+    """)
+
+    # Trata NaN e valores inválidos antes da inserção
+    df_substitutos = df_substitutos.replace({np.nan: None})
+    df_associados = df_associados.replace({np.nan: None})
+
+    df_sub_limited = df_substitutos.head(limite)
+
+    substitutos_values = []
+    for _, row in df_sub_limited.iterrows():
+        try:
+            substitutos_values.append((
+                str(row["Código pesquisado"]),
+                str(row["Descrição pesquisada"]),
+                str(row["Código produto"]),
+                str(row["Descrição do produto"]),
+                float(row["Valor unitário"]) if row["Valor unitário"] is not None else None,
+                float(row["Margem %"]) if row["Margem %"] is not None else None,
+                int(row["Quantidade estoque"]) if row["Quantidade estoque"] is not None else None,
+                str(row["Categoria"])
+            ))
+        except Exception as e:
+            print(f"[AVISO] Registro ignorado por erro de conversão: {e}")
+
+    insert_substitutos = """
+        INSERT INTO produtos_substitutos (
+            produto_pesquisado_cod,
+            produto_pesquisado_des,
+            produto_recomendado_cod,
+            produto_recomendado_des,
+            valor_unitario,
+            margem_percentual,
+            estoque,
+            categoria
+        ) VALUES %s
+    """
+
+    if substitutos_values:
+        execute_values(cur, insert_substitutos, substitutos_values)
+        print(f"[INFO] {len(substitutos_values)} registros inseridos em 'produtos_substitutos'.")
+    else:
+        print("[INFO] Nenhum substituto válido para inserção.")
+
+    df_assoc_filtrado = df_associados[
+        df_associados["Antecedente"].astype(str) == codigo_pesquisado
+    ].head(limite)
+
+    associados_values = []
+    for _, row in df_assoc_filtrado.iterrows():
+        try:
+            suporte = str(row["Aparece junto (%)"]).replace("%", "").strip()
+            confianca = str(row["Chance de comprar junto (%)"]).replace("%", "").strip()
+            associados_values.append((
+                str(row["Antecedente"]),
+                str(row["Descrição Antecedente"]),
+                str(row["Consequente"]),
+                str(row["Descrição Consequente"]),
+                float(suporte) if suporte else None,
+                float(confianca) if confianca else None
+            ))
+        except Exception as e:
+            print(f"[AVISO] Registro associado ignorado por erro de conversão: {e}")
+
+    insert_associados = """
+        INSERT INTO produtos_associados (
+            produto_pesquisado_cod,
+            produto_pesquisado_des,
+            produto_associado_cod,
+            produto_associado_des,
+            suporte,
+            confianca
+        ) VALUES %s
+    """
+
+    if associados_values:
+        execute_values(cur, insert_associados, associados_values)
+        print(f"[INFO] {len(associados_values)} registros inseridos em 'produtos_associados'.")
+    else:
+        print("[INFO] Nenhum associado válido para inserção.")
+
+    conn.commit()
+    cur.close()
+    conn.close()
+    print("[INFO] Inserção concluída com sucesso.")
