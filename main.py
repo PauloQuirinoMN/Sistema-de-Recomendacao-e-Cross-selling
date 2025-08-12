@@ -7,6 +7,7 @@ from limpeza_base_mesclada import BasePreparador
 from substitutos import RecomendadorSubstituto
 from recomendador import RecomendadorCrossSelling
 from salva_banco import salvar_no_banco
+from alimetador_banco import AtualizadorBase
 
 def main():
     print("[INFO] Iniciando processo de recomendação...\n")

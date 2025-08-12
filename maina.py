@@ -1,5 +1,6 @@
 import flet as ft
-
+from alimetador_banco import AtualizadorBase
+ 
 def main(page: ft.Page):
     # Configurações da página
     page.title = "Recomenda"
@@ -16,6 +17,9 @@ def main(page: ft.Page):
         weight=ft.FontWeight.BOLD,
         color=ft.Colors.BLUE_800
     )
+    
+
+    atualidador = AtualizadorBase()
 
     barra_pesquisa = ft.Row(
         [
@@ -34,6 +38,7 @@ def main(page: ft.Page):
                 on_click=lambda e: print("Pesquisar clicado")
             ),
             ft.Row([ft.TextButton(text="Limpar pesquisa")],alignment=ft.MainAxisAlignment.END),
+            ft.Row([ft.IconButton(icon=ft.Icons.UPDATE_SHARP, tooltip=ft.Tooltip('Atualizar bases de dados'), on_click=lambda e: atualidador.atualizar_base() ) ],alignment=ft.MainAxisAlignment.START),
         ],
         alignment=ft.MainAxisAlignment.START,
     )
