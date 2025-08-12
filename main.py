@@ -29,7 +29,7 @@ def main():
 
     print(f"[INFO] Base final possui {len(df_modelo)} registros válidos\n")
     # 3. Recomendação de Substitutos
-    cod_produto = 33980
+    cod_produto = 000
 
     # busca descrição do produto pesquisado
     desc_produto_pesquisado = None
@@ -56,7 +56,7 @@ def main():
     # 4. Recomendação por Cross-Selling
     print(f"🔄 Produto pesquisado: {cod_produto} (Cross-Selling)\n")
     cross = RecomendadorCrossSelling(df_modelo)
-    regras = cross.gerar_regras(cod_produto, min_support=0.0015, min_threshold=1.2, max_len=2)
+    regras = cross.gerar_regras(cod_produto, min_support=0.0015, min_threshold=1.0, max_len=2)
 
     df_formatado = pd.DataFrame()
 

@@ -7,7 +7,7 @@ def main(page: ft.Page):
     page.window_height = 600
     page.window_resizable = False
     page.window_prevent_close = True
-    page.theme_mode = ft.ThemeMode.LIGHT  # ou DARK para tema escuro
+    page.theme_mode = ft.ThemeMode.LIGHT
     
     # Elementos da interface
     titulo = ft.Text(

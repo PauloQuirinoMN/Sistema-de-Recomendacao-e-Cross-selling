@@ -102,9 +102,14 @@ def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
     else:
         print("[INFO] Nenhum substituto válido para inserção.")
 
-    df_assoc_filtrado = df_associados[
-        df_associados["Antecedente"].astype(str) == codigo_pesquisado
-    ].head(limite)
+    # Evitar erro se df_associados estiver vazio ou sem coluna 'Antecedente'
+    if df_associados.empty or "Antecedente" not in df_associados.columns:
+        print(f"[INFO] Nenhuma associação encontrada para o código {codigo_pesquisado}.")
+        df_assoc_filtrado = pd.DataFrame()  # cria vazio para evitar erros abaixo
+    else:
+        df_assoc_filtrado = df_associados[
+            df_associados["Antecedente"].astype(str) == codigo_pesquisado
+        ].head(limite)
 
     associados_values = []
     for _, row in df_assoc_filtrado.iterrows():

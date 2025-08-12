@@ -1,6 +1,6 @@
 import pandas as pd
 import time
-from datetime import timedelta
+from datetime import timedelta, datetime
 from limpeza_estoque import EstoqueCleaner
 from limpeza_notas import NotasCleaner
 from limpeza_base_mesclada import BasePreparador
@@ -30,34 +30,11 @@ def processar_produto(cod_produto, df_modelo):
 
     # Recomendação por Cross-Selling
     cross = RecomendadorCrossSelling(df_modelo)
-    regras = cross.gerar_regras(cod_produto, min_support=0.0015, min_threshold=1.0, max_len=2)
+    regras = cross.gerar_regras(cod_produto, min_support=0.0015,  max_len=2)
     df_formatado = cross.formatar_regras(regras) if not regras.empty else pd.DataFrame()
     
     return resultado_sub, df_formatado
 
-def contar_codigos_banco():
-    """Conta códigos distintos no banco"""
-    try:
-        conn = psycopg2.connect(
-            host="localhost",
-            dbname="bd_recomenda",
-            user="postgres",
-            password="recomenda",
-            port=5432
-        )
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(DISTINCT produto_pesquisado_cod) FROM produtos_substitutos;")
-        total_substitutos = cur.fetchone()[0]
-
-        cur.execute("SELECT COUNT(DISTINCT produto_pesquisado_cod) FROM produtos_associados;")
-        total_associados = cur.fetchone()[0]
-
-        cur.close()
-        conn.close()
-        return total_substitutos, total_associados
-    except Exception as e:
-        print(f"[ERRO] Não foi possível consultar o banco: {e}")
-        return None, None
 
 def main():
     start_time = time.time()
@@ -70,7 +47,7 @@ def main():
     df_modelo = BasePreparador().preparar_base(df_estoque, df_notas)
     
     # 2. Processar produtos
-    codigos_unicos = df_modelo['Código produto'].unique()[:80]  # Primeiros 10 para teste
+    codigos_unicos = df_modelo['Código produto'].unique()[:5] 
     total_produtos = len(codigos_unicos)
     produtos_processados = 0
     print(f"\nProcessando {total_produtos} produtos...")
@@ -82,7 +59,8 @@ def main():
             salvar_no_banco(resultado_sub, df_formatado, df_modelo)
             produtos_processados += 1
             tempo_produto = time.time() - produto_start
-            print(f"{i}/{total_produtos} | Cód: {cod_produto} | Tempo: {tempo_produto:.1f}s")
+            horario = datetime.now().strftime("%H:%M:%S")
+            print(f"{i}/{total_produtos} | Cód: {cod_produto} | Tempo: {tempo_produto:.1f}s | Horário: {horario}")
         except Exception as e:
             print(f"{i}/{total_produtos} | Cód: {cod_produto} | Erro: {str(e)}")
             continue
@@ -93,18 +71,6 @@ def main():
     print(f"Tempo total: {format_time(total_time)}")
     print(f"Média por produto: {total_time/total_produtos:.1f}s")
 
-    # 4. Conferência com o banco
-    total_substitutos, total_associados = contar_codigos_banco()
-    if total_substitutos is not None:
-        print(f"\n--- Conferência Banco ---")
-        print(f"Produtos processados no Python: {produtos_processados}")
-        print(f"Códigos distintos no banco (substitutos): {total_substitutos}")
-        print(f"Códigos distintos no banco (associados): {total_associados}")
-
-        if produtos_processados == total_substitutos == total_associados:
-            print("[OK] Todos os produtos processados estão no banco.")
-        else:
-            print("[ALERTA] Diferença encontrada! Verifique se houve falhas na inserção.")
 
 if __name__ == "__main__":
     main()
