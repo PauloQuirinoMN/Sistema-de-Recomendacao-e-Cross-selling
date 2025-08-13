@@ -1,6 +1,9 @@
 import flet as ft
 from alimetador_banco import AtualizadorBase
- 
+import pandas as pd
+from limpeza_base_mesclada import BasePreparador
+
+
 def main(page: ft.Page):
     # Configurações da página
     page.title = "Recomenda"
@@ -9,7 +12,42 @@ def main(page: ft.Page):
     page.window_resizable = False
     page.window_prevent_close = True
     page.theme_mode = ft.ThemeMode.LIGHT
+
+
+    barra_progresso = ft.ProgressBar(value=1.0, width=200)
+    pbl = ft.Text(" 0% ", size=12, weight=ft.FontWeight.BOLD)
+    log_text = ft.Text("", size=14, weight=ft.FontWeight.NORMAL, color=ft.Colors.BLACK)
+
+
+
+    def atualizar_progresso(prod_atual, total):
+        progresso = prod_atual / total
+        barra_progresso.value = progresso
+        pbl.value = f"{int(progresso * 100)}%"
+        page.update()
     
+    def mostrar_log(mensagem):
+        log_text.value = mensagem
+        page.update()
+
+    atualizador = AtualizadorBase()
+
+    def on_atualizar_click(e):
+        import threading
+        threading.Thread(
+            target=lambda: atualizador.atualizar_base(
+                intervalo_codigos=(0, 10),
+                progresso_callback=atualizar_progresso,
+                log_callback=mostrar_log
+            )
+        ).start()
+
+    botao_atualizar = ft.IconButton(
+        icon=ft.Icons.UPDATE_SHARP,
+        tooltip="Atualizar bases de dados",
+        on_click=on_atualizar_click
+    )
+ 
     # Elementos da interface
     titulo = ft.Text(
         "Bem-vindo ao Sistema de Recomendações",
@@ -18,8 +56,6 @@ def main(page: ft.Page):
         color=ft.Colors.BLUE_800
     )
     
-
-    atualidador = AtualizadorBase()
 
     barra_pesquisa = ft.Row(
         [
@@ -38,7 +74,12 @@ def main(page: ft.Page):
                 on_click=lambda e: print("Pesquisar clicado")
             ),
             ft.Row([ft.TextButton(text="Limpar pesquisa")],alignment=ft.MainAxisAlignment.END),
-            ft.Row([ft.IconButton(icon=ft.Icons.UPDATE_SHARP, tooltip=ft.Tooltip('Atualizar bases de dados'), on_click=lambda e: atualidador.atualizar_base() ) ],alignment=ft.MainAxisAlignment.START),
+            ft.Row(
+                [
+                    botao_atualizar,
+                    ft.Column(controls=[log_text,
+                    ft.Row(controls=[barra_progresso, pbl], alignment=ft.MainAxisAlignment.SPACE_EVENLY)])
+                ],alignment=ft.MainAxisAlignment.CENTER),
         ],
         alignment=ft.MainAxisAlignment.START,
     )

@@ -50,38 +50,53 @@ class AtualizadorBase:
 
         return resultado_sub, df_formatado
 
-    def atualizar_base(self, intervalo_codigos=(0, 100)):
-        """Executa o processo completo de atualização da base"""
+    def atualizar_base(self, intervalo_codigos=(0, 100), progresso_callback=None, log_callback=None):
         start_time = time.time()
-        print("Iniciando processamento...")
 
-        # 1. Carrega e prepara base
-        self.carregar_e_preparar_base()
+        if log_callback:
+            log_callback("Iniciando processamento...")
 
-        # 2. Seleciona faixa de produtos para processar
+        # Carrega e prepara base
+        if log_callback:
+            log_callback("Carregando e limpando dados...")
+
+        if log_callback:
+            log_callback("Iniciando limpeza da base de estoque...")
+        df_estoque = EstoqueCleaner().clean(pd.read_excel(self.caminho_estoque))
+
+        if log_callback:
+            log_callback("Limpeza de estoque concluída.")
+
+        if log_callback:
+            log_callback("Iniciando limpeza da base de notas...")
+        df_notas = NotasCleaner().clean(pd.read_excel(self.caminho_notas))
+
+        if log_callback:
+            log_callback("Limpeza de notas concluída.")
+
+        self.df_modelo = BasePreparador().preparar_base(df_estoque, df_notas)
+
+        # Agora que a limpeza acabou, começamos a barra de progresso
         codigos_unicos = self.df_modelo['Código produto'].unique()[intervalo_codigos[0]:intervalo_codigos[1]]
         total_produtos = len(codigos_unicos)
-        produtos_processados = 0
-        print(f"\nProcessando {total_produtos} produtos...")
+        if log_callback:
+            log_callback(f"Processando {total_produtos} produtos...")
 
-        # 3. Processa cada produto
         for i, cod_produto in enumerate(codigos_unicos, 1):
-            produto_start = time.time()
             try:
                 resultado_sub, df_formatado = self.processar_produto(cod_produto)
                 salvar_no_banco(resultado_sub, df_formatado, self.df_modelo)
-                produtos_processados += 1
-                tempo_produto = time.time() - produto_start
-                horario = datetime.now().strftime("%H:%M:%S")
-                print(f"{i}/{total_produtos} | Cód: {cod_produto} | Tempo: {tempo_produto:.1f}s | Horário: {horario}")
+
+                if progresso_callback:
+                    progresso_callback(i, total_produtos)
+
             except Exception as e:
-                print(f"{i}/{total_produtos} | Cód: {cod_produto} | Erro: {str(e)}")
+                if log_callback:
+                    log_callback(f"{i}/{total_produtos} | Erro: {str(e)}")
                 continue
-        
 
-        # 4. Relatório final
         total_time = time.time() - start_time
-        print(f"\nProcesso concluído!")
-        print(f"Tempo total: {self.format_time(total_time)}")
-        print(f"Média por produto: {total_time / total_produtos:.1f}s")
-
+    # 🔹 Mensagem final
+        if log_callback:
+            data_atual = datetime.now().strftime("%d/%m/%Y")
+            log_callback(f"Base atualizada em {data_atual} - {self.format_time(total_time)}.")
