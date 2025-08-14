@@ -3,6 +3,7 @@ from psycopg2.extras import execute_values
 from datetime import datetime
 import pandas as pd
 import numpy as np
+from consolidar import salvar_consolidado
 
 def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
     # Obter código pesquisado
@@ -33,6 +34,8 @@ def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
     except Exception as e:
         print(f"[ERRO] Falha ao conectar ao banco de dados: {e}")
         return
+    # Cria tabela e insere dados consolidados
+    salvar_consolidado(conn, df_modelo)
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS produtos_substitutos (
