@@ -1,11 +1,12 @@
 import flet as ft
-from alimetador_banco import AtualizadorBase
-import pandas as pd
-from limpeza_base_mesclada import BasePreparador
+from alimentador_banco2 import AtualizadorBase
+# import pandas as pd
+# from limpeza_base_mesclada import BasePreparador
+import asyncio
+import threading
 
 
 def main(page: ft.Page):
-    # Configurações da página
     page.title = "Recomenda"
     page.window_width = 800
     page.window_height = 600
@@ -13,41 +14,59 @@ def main(page: ft.Page):
     page.window_prevent_close = True
     page.theme_mode = ft.ThemeMode.LIGHT
 
-
-    barra_progresso = ft.ProgressBar(value=1.0, width=200)
-    pbl = ft.Text(" 0% ", size=12, weight=ft.FontWeight.BOLD)
+    # logs e barra de progresso
+    barra_progresso = ft.ProgressBar(value=0.0, width=200)
+    pbl = ft.Text("0%", size=12, weight=ft.FontWeight.BOLD)
     log_text = ft.Text("", size=14, weight=ft.FontWeight.NORMAL, color=ft.Colors.BLACK)
-
-
-
-    def atualizar_progresso(prod_atual, total):
-        progresso = prod_atual / total
-        barra_progresso.value = progresso
-        pbl.value = f"{int(progresso * 100)}%"
-        page.update()
-    
-    def mostrar_log(mensagem):
-        log_text.value = mensagem
-        page.update()
 
     atualizador = AtualizadorBase()
 
-    def on_atualizar_click(e):
-        import threading
-        threading.Thread(
-            target=lambda: atualizador.atualizar_base(
-                intervalo_codigos=(0, 100),
-                progresso_callback=atualizar_progresso,
-                log_callback=mostrar_log
-            )
-        ).start()
+    # -------- FUNÇÕES DE ATUALIZAÇÃO --------
+      # Função para atualizar progresso
+    def mostrar_progresso(atual: int, total: int):
 
+    # Atualiza a cada 2% ou a cada 5 produtos
+        if total > 50 and atual % max(5, total // 50) != 0:
+            return
+        
+        progresso = atual / total
+        async def _update():
+            barra_progresso.value = progresso
+            pbl.value = f"{int(progresso*100)}%"
+            page.update()
+        
+        loop = asyncio.get_running_loop()
+        asyncio.run_coroutine_threadsafe(_update(), loop)
+
+    logs_buffer = []
+
+    def mostrar_log(mensagem: str):
+        logs_buffer.append(mensagem)
+
+        async def _update():
+            log_text.value = mensagem
+            page.update()
+
+        loop = asyncio.get_running_loop()  # pega o loop que o Flet está rodando
+        asyncio.run_coroutine_threadsafe(_update(), loop)
+
+   # ----------------- THREAD DE ATUALIZAÇÃO -----------------
+    def rodar_atualizacao(e):
+        threading.Thread(
+            target=lambda: asyncio.run(atualizador.atualizar_base(
+                intervalo_codigos=(0, 100),
+                progresso_callback=mostrar_progresso,
+                log_callback=mostrar_log
+            )),
+            daemon=True
+        ).start()
+        
     botao_atualizar = ft.IconButton(
         icon=ft.Icons.UPDATE_SHARP,
         tooltip="Atualizar bases de dados",
-        on_click=on_atualizar_click
+        on_click=rodar_atualizacao
     )
- 
+
     # Elementos da interface
     titulo = ft.Text(
         "Bem-vindo ao Sistema de Recomendações",
@@ -171,28 +190,6 @@ def main(page: ft.Page):
                             ft.DataCell(ft.Text("22")),
                         ],
                         on_select_changed=lambda e: print("Produto selecionado: 56233")
-                    ),
-                    # Exemplo de registro 3
-                    ft.DataRow(
-                        cells=[
-                            ft.DataCell(ft.Text("60565")),
-                            ft.DataCell(ft.Text("Conector Blindado 5 polos")),
-                            ft.DataCell(ft.Text("R$ 45,20")),
-                            ft.DataCell(ft.Text("35,5%")),
-                            ft.DataCell(ft.Text("37")),
-                        ],
-                        on_select_changed=lambda e: print("Produto selecionado: 60565")
-                    ),
-                    # Exemplo de registro 4
-                    ft.DataRow(
-                        cells=[
-                            ft.DataCell(ft.Text("71289")),
-                            ft.DataCell(ft.Text("Filtro de Linha com Proteção")),
-                            ft.DataCell(ft.Text("R$ 120,00")),
-                            ft.DataCell(ft.Text("40,0%")),
-                            ft.DataCell(ft.Text("8")),
-                        ],
-                        on_select_changed=lambda e: print("Produto selecionado: 71289")
                     ),
                 ],
                 # Estilização da tabela
