@@ -4,7 +4,8 @@ from alimentador_banco2 import AtualizadorBase
 # from limpeza_base_mesclada import BasePreparador
 import asyncio
 import threading
-import consultas  
+import consultas 
+from consultas import TabelaRecomendacao
 
 
 
@@ -77,35 +78,66 @@ def main(page: ft.Page):
         color=ft.Colors.BLUE_800
     )
     
+    # Resultado do código pesquisado 
 
+    # Container dinâmico para resultado da pesquisa
     resultado_pesquisa = ft.Container()
+    recomendacao_ui = ft.Container()
 
-    # # Configuração do banco
-    # db_config = {
-    #     "host": "localhost",
-    #     "dbname": "bd_recomenda",
-    #     "user": "postgres",
-    #     "password": "recomenda",
-    #     "port": 5432
-    # }
-
-
+    # Campo de código do produto
     campo_codigo = ft.TextField(label="Código", hint_text="ex.: 32581")
-    pesquisa = consultas.PesquisaProduto(page, resultado_pesquisa)
+   
+   
+    # Função para atualizar o resultado da pesquisa dinamicamente
+    def atualizar_resultado_ui(codigo):
+        pesquisa_produto = consultas.PesquisaProduto()
+        resultado = pesquisa_produto.buscar_produto(codigo)
 
+        if "mensagem" in resultado:
+            resultado_pesquisa.content = ft.Column(
+                [
+                    ft.Text("RESULTADO DA PESQUISA:", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800),
+                    ft.Text(resultado["mensagem"],
+                            style=ft.TextStyle(size=18, color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD))
+                ]
+            )
+            recomendacao_ui.content = None  # não mostra recomendação
+        else:
+            resultado_pesquisa.content = ft.Column(
+                [
+                    ft.Text("RESULTADO DA PESQUISA:", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800),
+                    ft.Text(
+                        spans=[
+                            ft.TextSpan(f"Item {resultado['codigo_produto']} - "),
+                            ft.TextSpan(f"{resultado['descricao_produto']}", style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLUE)),
+                            ft.TextSpan(" - Valor "),
+                            ft.TextSpan(f"R$ {resultado['valor_unitario']}", style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLUE)),
+                            ft.TextSpan(", tem uma Margem "),
+                            ft.TextSpan(f"{resultado['margem_percent']} %", style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLUE)),
+                            ft.TextSpan(f" com estoque de {resultado['quantidade_estoque']} unidades."),
+                        ],
+                        size=16
+                    )
+                ]
+            )
+
+            # Cria a tabela de recomendação
+            tabela = consultas.TabelaRecomendacao(pesquisa_produto.engine)
+            recomendacao_ui.content = tabela.criar_tabela(resultado['codigo_produto'])
+
+        page.update()
+
+
+        # Botão de pesquisa
+    botao_pesquisar = ft.TextButton(
+        content=ft.Row([ft.Icon(ft.Icons.SEARCH, size=20), ft.Text("Pesquisar")]),
+        on_click=lambda e: atualizar_resultado_ui(campo_codigo.value)
+    )
 
     barra_pesquisa = ft.Row(
         [
             campo_codigo, 
-            ft.TextButton(
-                content=ft.Row(
-                    [
-                        ft.Icon(ft.Icons.SEARCH, size=20),
-                        ft.Text("Pesquisar")
-                    ]
-                ),
-                on_click=lambda e: pesquisa.atualizar_resultado(campo_codigo.value)
-            ),
+            botao_pesquisar,
             ft.Row([ft.TextButton(text="Limpar pesquisa")],alignment=ft.MainAxisAlignment.END),
             ft.Row(
                 [
@@ -116,118 +148,11 @@ def main(page: ft.Page):
         ],
         alignment=ft.MainAxisAlignment.START,
     )
-    
-    produto = 32581
-    descricao =' Papel A4 -Produto Exemplo Premium'
-    valor = 254.25
-    margem = 56
-    estoque = 41
-
-    codigo_nao_econtrado = ft.Container(
-        content=ft.Column(
-            [
-                ft.Text(value="RESULTADO DA PESQUISA:", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800),
-                ft.Text(value=f"Produto {produto} não foi encontrado na Base !!!", style=ft.TextStyle(size=18, color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD))
-            ]
-        )
-    )
-    codigo_foi_encontrado = ft.Container(
-        content=ft.Column(
-            [
-                ft.Text(value="RESULTADO DA PESQUISA:", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800),
-                ft.Text(
-                    spans=[
-                        ft.TextSpan(f"Item {produto} - "),
-                        ft.TextSpan(f"{descricao}", style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLUE)),
-                        ft.TextSpan(" - Valor "),
-                        ft.TextSpan(f"R$ {valor}", style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLUE)),
-                        ft.TextSpan(", tem uma Margem "),
-                        ft.TextSpan(f"{margem} %", style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLUE)),
-                        ft.TextSpan(f" com estoque de {estoque} unidades."),
-                    ],
-                    size=16
-                )
-            ]
-        )
-    )
-    resultado = [codigo_nao_econtrado, codigo_foi_encontrado]
-    resultado_pesquisa = ft.Container(
-        content=ft.Row(
-            controls=[
-                resultado[1],
-            ],
-            spacing=10,
-            alignment=ft.MainAxisAlignment.START,
-        )
-    )
-
-    recomendacao = ft.Container(
-    content=ft.Column(
-        controls=[
-            ft.Text("PRODUTOS RECOMENDADOS", 
-                   size=16, 
-                   weight=ft.FontWeight.BOLD,
-                   color=ft.Colors.BLUE_800),
-            ft.Divider(height=1, color=ft.Colors.BLUE_GREY_300),
-            
-            # Tabela de produtos recomendados
-            ft.DataTable(
-                columns=[
-                    ft.DataColumn(ft.Text("Código", weight=ft.FontWeight.BOLD)),
-                    ft.DataColumn(ft.Text("Descrição", weight=ft.FontWeight.BOLD)),
-                    ft.DataColumn(ft.Text("Valor Unitário", weight=ft.FontWeight.BOLD),
-                                numeric=True),
-                    ft.DataColumn(ft.Text("Margem %", weight=ft.FontWeight.BOLD),
-                                numeric=True),
-                    ft.DataColumn(ft.Text("Estoque", weight=ft.FontWeight.BOLD),
-                                numeric=True),
-                ],
-                rows=[
-                    # Exemplo de registro 1
-                    ft.DataRow(
-                        cells=[
-                            ft.DataCell(ft.Text("48721")),
-                            ft.DataCell(ft.Text("Kit Upgrade Performance")),
-                            ft.DataCell(ft.Text("R$ 189,90")),
-                            ft.DataCell(ft.Text("32,5%")),
-                            ft.DataCell(ft.Text("15")),
-                        ],
-                        on_select_changed=lambda e: print("Produto selecionado: 48721")
-                    ),
-                    # Exemplo de registro 2
-                    ft.DataRow(
-                        cells=[
-                            ft.DataCell(ft.Text("56233")),
-                            ft.DataCell(ft.Text("Sensor de Temperatura Premium")),
-                            ft.DataCell(ft.Text("R$ 79,50")),
-                            ft.DataCell(ft.Text("28,0%")),
-                            ft.DataCell(ft.Text("22")),
-                        ],
-                        on_select_changed=lambda e: print("Produto selecionado: 56233")
-                    ),
-                ],
-                # Estilização da tabela
-                border=ft.border.all(1, ft.Colors.BLUE_GREY_200),
-                border_radius=8,
-                vertical_lines=ft.border.BorderSide(1, ft.Colors.BLUE_GREY_100),
-                horizontal_lines=ft.border.BorderSide(1, ft.Colors.BLUE_GREY_100),
-                heading_row_color=ft.Colors.BLUE_GREY_50,
-                heading_row_height=40,
-                data_row_color={"hovered": ft.Colors.BLUE_GREY_100},
-                show_checkbox_column=False,
-                width=750,
-            ),
-        ],
-        spacing=10
-    ),
-    padding=ft.padding.symmetric(vertical=10, horizontal=15),
-    margin=ft.margin.only(bottom=15),
-    )
-
+ 
     associados = ft.Container(
     content=ft.Column(
         controls=[
-            ft.Text(f"PRODUTOS QUE NORMALMENTE SÃO COMPRADOS JUNTOS COM {produto} {descricao}", 
+            ft.Text(f"PRODUTOS QUE NORMALMENTE SÃO COMPRADOS JUNTOS COM {campo_codigo} - {campo_codigo.value}", 
                    size=16, 
                    weight=ft.FontWeight.BOLD,
                    color=ft.Colors.BLUE_800),
@@ -309,7 +234,7 @@ def main(page: ft.Page):
         [
             resultado_pesquisa,
             ft.Divider(height=1),
-            recomendacao,
+            recomendacao_ui,
             ft.Divider(height=10),
             associados,
         ],
