@@ -4,6 +4,8 @@ from alimentador_banco2 import AtualizadorBase
 # from limpeza_base_mesclada import BasePreparador
 import asyncio
 import threading
+import consultas  
+
 
 
 def main(page: ft.Page):
@@ -15,9 +17,9 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
 
     # logs e barra de progresso
-    barra_progresso = ft.ProgressBar(value=0.0, width=200)
-    pbl = ft.Text("0%", size=12, weight=ft.FontWeight.BOLD)
-    log_text = ft.Text("", size=14, weight=ft.FontWeight.NORMAL, color=ft.Colors.BLACK)
+    barra_progresso = ft.ProgressBar(value=0.0, width=250)
+    pbl = ft.Text("0%", size=14, weight=ft.FontWeight.BOLD)
+    log_text = ft.Text("", size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK)
 
     atualizador = AtualizadorBase()
 
@@ -54,7 +56,7 @@ def main(page: ft.Page):
     def rodar_atualizacao(e):
         threading.Thread(
             target=lambda: asyncio.run(atualizador.atualizar_base(
-                intervalo_codigos=(0, 100),
+                intervalo_codigos=(0, 1000),
                 progresso_callback=mostrar_progresso,
                 log_callback=mostrar_log
             )),
@@ -76,13 +78,25 @@ def main(page: ft.Page):
     )
     
 
+    resultado_pesquisa = ft.Container()
+
+    # # Configuração do banco
+    # db_config = {
+    #     "host": "localhost",
+    #     "dbname": "bd_recomenda",
+    #     "user": "postgres",
+    #     "password": "recomenda",
+    #     "port": 5432
+    # }
+
+
+    campo_codigo = ft.TextField(label="Código", hint_text="ex.: 32581")
+    pesquisa = consultas.PesquisaProduto(page, resultado_pesquisa)
+
+
     barra_pesquisa = ft.Row(
         [
-            ft.TextField(
-                label="Código",
-                hint_text="ex.: 32581"
-            ), 
-
+            campo_codigo, 
             ft.TextButton(
                 content=ft.Row(
                     [
@@ -90,7 +104,7 @@ def main(page: ft.Page):
                         ft.Text("Pesquisar")
                     ]
                 ),
-                on_click=lambda e: print("Pesquisar clicado")
+                on_click=lambda e: pesquisa.atualizar_resultado(campo_codigo.value)
             ),
             ft.Row([ft.TextButton(text="Limpar pesquisa")],alignment=ft.MainAxisAlignment.END),
             ft.Row(
@@ -102,7 +116,7 @@ def main(page: ft.Page):
         ],
         alignment=ft.MainAxisAlignment.START,
     )
-
+    
     produto = 32581
     descricao =' Papel A4 -Produto Exemplo Premium'
     valor = 254.25
@@ -304,7 +318,7 @@ def main(page: ft.Page):
         spacing=0,
         scroll=ft.ScrollMode.AUTO
     )
-   
+
     # Layout principal
     layout_principal = ft.Column(
         [

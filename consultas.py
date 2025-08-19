@@ -1,49 +1,72 @@
-import psycopg2
-import pandas as pd 
-from limpeza_base_mesclada import BasePreparador
+# consultas.py
+import flet as ft
+import pandas as pd
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
 
-class ConsultasBanco:
-    def __init__(self, host="localhost", dbname="bd_recomenda", user="postgres", password="recomenda", port=5432):
-        self.conn = None
+class PesquisaProduto:
+    COLUNAS_MAP = {
+        "Descrição do produto": "descricao_produto",  
+        "Valor unitário": "valor_unitario",
+        "Margem %": "margem_percent",
+        "Quantidade estoque": "quantidade_estoque"
+    }
+
+    def __init__(self, page: ft.Page, resultado_pesquisa: ft.Container):
+        self.page = page
+        self.resultado_pesquisa = resultado_pesquisa
+        # Configurar a conexão com SQLAlchemy
+        self.engine = create_engine(
+            "postgresql+psycopg2://postgres:recomenda@localhost:5432/bd_recomenda"
+        )
+
+    def buscar_produto(self, codigo):
+        query = f"SELECT * FROM produtos_consolidados WHERE codigo_produto = {codigo}"
         try:
-            self.conn = psycopg2.connect(
-                host=host,
-                dbname=dbname,
-                user=user,
-                password=password,
-                port=port
+            df = pd.read_sql_query(query, self.engine)
+            return df
+        except SQLAlchemyError as e:
+            print("Erro ao consultar banco:", e)
+            return pd.DataFrame()
+
+    def atualizar_resultado(self, codigo: str):
+        if not codigo:
+            return
+
+        df = self.buscar_produto(codigo)
+
+        if df.empty:
+            # Produto não encontrado
+            self.resultado_pesquisa.content = ft.Column(
+                [
+                    ft.Text("RESULTADO DA PESQUISA:", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800),
+                    ft.Text(f"Produto {codigo} não foi encontrado na Base !!!",
+                            style=ft.TextStyle(size=18, color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD))
+                ]
             )
-        except Exception as e:
-            print(f"[ERRO] Falha ao conectar ao banco de dados: {e}")
+        else:
+            # Produto encontrado
+            row = df.iloc[0]
+            self.resultado_pesquisa.content = ft.Column(
+                [
+                    ft.Text("RESULTADO DA PESQUISA:", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800),
+                    ft.Text(
+                        spans=[
+                            ft.TextSpan(f"Item {row['codigo_produto']} - "),
+                            ft.TextSpan(f"{row[self.COLUNAS_MAP['Descrição do produto']]}",
+                                        style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLUE)),
+                            ft.TextSpan(" - Valor "),
+                            ft.TextSpan(f"R$ {row[self.COLUNAS_MAP['Valor unitário']]}",
+                                        style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLUE)),
+                            ft.TextSpan(", tem uma Margem "),
+                            ft.TextSpan(f"{row[self.COLUNAS_MAP['Margem %']]} %",
+                                        style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLUE)),
+                            ft.TextSpan(f" com estoque de {row[self.COLUNAS_MAP['Quantidade estoque']]} unidades."),
+                        ],
+                        size=16
+                    )
+                ]
+            )
 
-    def PesquisarProduto(self, cod_produto):
-        """Consulta o banco de dados para obter informações sobre um produto específico"""
-        if not self.conn:
-            print("[ERRO] Conexão com o banco de dados não estabelecida.")
-            return None
-        
-        try:
-            cur = self.conn.cursor()
-            cur.execute("""
-                SELECT * FROM produtos_substitutos
-                WHERE produto_pesquisado_cod = %s
-            """, (cod_produto,))
-            resultado = cur.fetchall()
-
-            cur.close()
-            return resultado[0][0:7]
-        except Exception as e:
-            print(f"[ERRO] Falha ao consultar o banco de dados: {e}")
-            return None
-        
-
-    def fechar_conexao(self):
-        """Fecha a conexão com o banco de dados"""
-        if self.conn:
-            self.conn.close()
-        print("[INFO] Conexão com o banco de dados fechada.")
-
-
-BasePreparador.preparar_base()
-resultado = ConsultasBanco(host="localhost", dbname="bd_recomenda", user="postgres", password="recomenda", port=5432).PesquisarProduto('32608')
-print(resultado)
+        # Atualiza a interface
+        self.page.update()

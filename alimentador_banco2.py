@@ -102,7 +102,7 @@ class AtualizadorBase:
 
         codigos_unicos = self.df_modelo['Código produto'].unique()[intervalo_codigos[0]:intervalo_codigos[1]]
         total_produtos = len(codigos_unicos)
-        
+
         if self.log_callback:
             self.log_callback(f"Processando {total_produtos} produtos...")
 
@@ -132,3 +132,4 @@ class AtualizadorBase:
         if self.log_callback:
             data_atual = datetime.now().strftime("%d/%m/%Y")
             self.log_callback(f"Base atualizada em {data_atual} - {self.format_time(total_time)}.")
+            await asyncio.sleep(0)

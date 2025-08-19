@@ -50,7 +50,7 @@ class AtualizadorBase:
 
         return resultado_sub, df_formatado
 
-    def atualizar_base(self, intervalo_codigos=(0, 100), progresso_callback=None, log_callback=None):
+    def atualizar_base(self, intervalo_codigos=(400, 410), progresso_callback=None, log_callback=None):
         start_time = time.time()
 
         if log_callback:
@@ -76,11 +76,22 @@ class AtualizadorBase:
 
         self.df_modelo = BasePreparador().preparar_base(df_estoque, df_notas)
 
+
         # Agora que a limpeza acabou, começamos a barra de progresso
         codigos_unicos = self.df_modelo['Código produto'].unique()[intervalo_codigos[0]:intervalo_codigos[1]]
         total_produtos = len(codigos_unicos)
+
+
+
         if log_callback:
             log_callback(f"Processando {total_produtos} produtos...")
+
+
+
+        if len(codigos_unicos) == 0:
+            if log_callback:
+                log_callback("Nenhum código encontrado para processar.")
+            return
 
         for i, cod_produto in enumerate(codigos_unicos, 1):
             try:
@@ -94,6 +105,7 @@ class AtualizadorBase:
                 if log_callback:
                     log_callback(f"{i}/{total_produtos} | Erro: {str(e)}")
                 continue
+
 
         total_time = time.time() - start_time
     # 🔹 Mensagem final
