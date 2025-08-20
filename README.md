@@ -3,7 +3,7 @@
 ## **Visão Geral**  
 O **Sistema de Recomendação** é uma solução automatizada que processa dados de estoque e notas fiscais para gerar recomendações de produtos de duas formas:  
 
-1. **Recomendação de Substitutos** → Sugere produtos similares para substituição caso o mesmo não esteja disponível em estoque.  
+1. **Recomendação de Substitutos** → Sugere produtos similares com relação a categoria para substituição caso o mesmo não esteja disponível em estoque ou se disponível será exibido semelhantes baseados em valor unitário e margem.
 2. **Recomendação por Cross-Selling** → Identifica produtos frequentemente comprados juntos.  
 
 Seu objetivo é **aumentar e melhorar o ticket de vendas** ao oferecer sugestões relevantes baseadas em dados históricos e características dos produtos. 

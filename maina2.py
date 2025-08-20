@@ -7,6 +7,7 @@ import threading
 import consultas 
 from consultas import TabelaAssociados
 from sqlalchemy import create_engine
+from manual import ManualSistema
 
 # Cria conexão com o banco
 # engine = create_engine("postgresql+psycopg2://postgres:recomenda@localhost:5432/bd_recomenda")
@@ -96,6 +97,7 @@ def main(page: ft.Page):
 
    # Campo de código do produto
     campo_codigo = ft.TextField(label="Código", hint_text="ex.: 32581")
+    
 
     # Instancia a classe de associados
     tabela_associados = TabelaAssociados(engine)
@@ -105,7 +107,31 @@ def main(page: ft.Page):
 
     # Containers de resultados da pesquisa e recomendação
     resultado_pesquisa = ft.Container()
-    recomendacao_ui = ft.Container()
+
+    manual_uso = ManualSistema()
+    recomendacao_ui = ft.Container(
+        bgcolor=ft.Colors.TRANSPARENT,
+        padding=20,
+        content=manual_uso
+    )
+
+    def limpar_pesquisa(e):
+        # Limpa o campo de pesquisa
+        campo_codigo.value = ""
+        
+        # Limpa todos os containers de resultados
+        resultado_pesquisa.content = None
+        container_associados.content = None
+        
+        # Recria o manual
+        manual_uso = ManualSistema()
+        
+        # Atualiza o container com o manual
+        recomendacao_ui.content = manual_uso
+        
+        # Atualiza a página
+        page.update()
+
 
     # Função para atualizar tabela de associados
     def atualizar_associados(e):
@@ -166,7 +192,7 @@ def main(page: ft.Page):
         [
             campo_codigo,
             botao_pesquisar,
-            ft.Row([ft.TextButton(text="Limpar pesquisa")], alignment=ft.MainAxisAlignment.END),
+            ft.Row([ft.TextButton(text="Limpar pesquisa", on_click=limpar_pesquisa)], alignment=ft.MainAxisAlignment.END),
             ft.Row(
                 [
                     botao_atualizar,
@@ -190,7 +216,7 @@ def main(page: ft.Page):
             ft.Divider(height=1),
             recomendacao_ui,
             ft.Divider(height=10),
-            container_associados,  # <- Container já adicionado aqui
+            container_associados, 
         ],
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
