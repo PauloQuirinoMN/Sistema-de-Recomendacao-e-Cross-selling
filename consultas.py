@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 import flet as ft
 
-
+# CLASSE PARA EXIBIR DE CARACTERÍSTICAS DO PRODUTO
 class PesquisaProduto:
     COLUNAS_MAP = {
         "descricao_produto": "descricao_produto",  
@@ -40,7 +40,7 @@ class PesquisaProduto:
             }
 
 
-# NOVA CLASSE PARA TABELA DE RECOMENDAÇÃO
+# CLASSE PARA TABELA DE RECOMENDAÇÃO
 class TabelaRecomendacao:
     def __init__(self, engine):
         self.engine = engine
@@ -123,3 +123,110 @@ class TabelaRecomendacao:
             padding=ft.padding.symmetric(vertical=10, horizontal=15),
             margin=ft.margin.only(bottom=15),
         )
+    
+
+class TabelaAssociados:
+    def __init__(self, engine):
+        self.engine = engine
+
+    def buscar_associados(self, codigo: str):
+        """
+        Busca os produtos associados (cross-selling) no banco
+        """
+        if not codigo.strip():
+            return pd.DataFrame()
+
+        query = """
+        SELECT DISTINCT ON (a.produto_associado_cod)
+        a.produto_associado_cod,
+        a.produto_associado_des,
+        a.suporte AS frequencia,
+        a.confianca AS conversao,
+        c.valor_unitario,
+        c.margem_percent AS margem_percentual,
+        c.quantidade_estoque
+        FROM produtos_associados a
+        LEFT JOIN produtos_consolidados c
+            ON a.produto_associado_cod::text = c.codigo_produto::text
+        WHERE a.produto_pesquisado_cod = %s
+        ORDER BY a.produto_associado_cod, a.suporte DESC
+        LIMIT 4;
+        """
+        try:
+            df = pd.read_sql_query(query, self.engine, params=(codigo,))
+            return df
+        except SQLAlchemyError as e:
+            print("Erro ao consultar associados:", e)
+            return pd.DataFrame()
+
+    def criar_tabela(self, codigo: str):
+        df = self.buscar_associados(codigo)
+
+        if df.empty:
+            return ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text(f"Nenhum produto associado encontrado para o código {codigo}.",
+                                color=ft.Colors.RED)
+                    ]
+                ),
+                padding=ft.padding.symmetric(vertical=10, horizontal=15),
+                margin=ft.margin.only(bottom=15),
+            )
+
+        # Montar linhas dinamicamente
+        rows = []
+        for _, row in df.iterrows():
+            rows.append(
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(str(row["produto_associado_cod"]))),
+                        ft.DataCell(ft.Text(str(row["produto_associado_des"]))),
+                        ft.DataCell(ft.Text(f'R$ {row["valor_unitario"]:.2f}'.replace(".", ","))),
+                        ft.DataCell(ft.Text(f'{row["margem_percentual"]:.1f}%')),
+                        ft.DataCell(ft.Text(f'{row["frequencia"]:.0f}%')),
+                        ft.DataCell(ft.Text(f'{row["conversao"]:.0f}%')),
+                    ],
+                    on_select_changed=lambda e, cod=row["produto_associado_cod"]: 
+                        print(f"Produto associado selecionado: {cod}")
+                )
+            )
+
+        # Retornar o container pronto
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text(f"PRODUTOS QUE NORMALMENTE SÃO COMPRADOS JUNTOS COM {codigo}", 
+                            size=16, 
+                            weight=ft.FontWeight.BOLD,
+                            color=ft.Colors.BLUE_800),
+                    ft.Divider(height=1, color=ft.Colors.BLUE_GREY_300),
+                    ft.DataTable(
+                        columns=[
+                            ft.DataColumn(ft.Text("Código", weight=ft.FontWeight.BOLD)),
+                            ft.DataColumn(ft.Text("Descrição", weight=ft.FontWeight.BOLD)),
+                            ft.DataColumn(ft.Text("V. Unitário", weight=ft.FontWeight.BOLD), numeric=True),
+                            ft.DataColumn(ft.Text("Margem %", weight=ft.FontWeight.BOLD), numeric=True),
+                            ft.DataColumn(ft.Text("Aparecem Juntos", weight=ft.FontWeight.BOLD), numeric=True,
+                                          tooltip="Frequência que aparecem juntos nas vendas"),
+                            ft.DataColumn(ft.Text("Comprados Juntos", weight=ft.FontWeight.BOLD), numeric=True,
+                                          tooltip="Taxa de conversão quando aparecem juntos"),
+                        ],
+                        rows=rows,
+                        border=ft.border.all(1, ft.Colors.BLUE_GREY_200),
+                        border_radius=8,
+                        vertical_lines=ft.border.BorderSide(1, ft.Colors.BLUE_GREY_100),
+                        horizontal_lines=ft.border.BorderSide(1, ft.Colors.BLUE_GREY_100),
+                        heading_row_color=ft.Colors.BLUE_GREY_50,
+                        heading_row_height=40,
+                        data_row_color={"hovered": ft.Colors.BLUE_GREY_100},
+                        show_checkbox_column=False,
+                        width=850,
+                    ),
+                ],
+                spacing=10
+            ),
+            padding=ft.padding.symmetric(vertical=10, horizontal=15),
+            margin=ft.margin.only(bottom=15),
+        )
+
