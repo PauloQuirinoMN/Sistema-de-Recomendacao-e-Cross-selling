@@ -62,32 +62,3 @@ class ManualSistema(ft.Container):
         self.border_radius = 30
         self.bgcolor = ft.Colors.WHITE38
         self.expand = True
-
-
-class AlertaCodigoInvalido:
-    def __init__(self, page: ft.Page):
-        self.page = page
-
-    def validar_ou_alertar(self, campo_codigo: ft.TextField) -> bool:
-        """
-        Retorna True se o código for válido.
-        Se inválido, abre um AlertDialog e retorna False.
-        """
-        valor = (campo_codigo.value or "").strip()
-        if not valor.isdigit():
-            dlg = ft.AlertDialog(
-                modal=True,
-                title=ft.Text("Código inválido"),
-                content=ft.Text("Por favor, insira um código numérico válido."),
-                actions=[ft.TextButton("OK", on_click=lambda e: self._fechar(dlg))],
-                actions_alignment="end",
-            )
-            self.page.dialog = dlg
-            dlg.open = True
-            self.page.update()
-            return False
-        return True
-
-    def _fechar(self, dlg: ft.AlertDialog):
-        dlg.open = False
-        self.page.update()

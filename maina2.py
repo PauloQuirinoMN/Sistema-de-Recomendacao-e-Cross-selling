@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from alimentador_banco2 import AtualizadorBase
 import consultas
 from consultas import TabelaAssociados
-from manual import ManualSistema, AlertaCodigoInvalido
+from manual import ManualSistema
 
 
 def main(page: ft.Page):
@@ -24,7 +24,6 @@ def main(page: ft.Page):
     )
 
     # ---------------- INSTÂNCIAS PRINCIPAIS ----------------
-    manual_alerta = AlertaCodigoInvalido(page)
     atualizador = AtualizadorBase()
     tabela_associados = TabelaAssociados(engine)
 
@@ -43,6 +42,7 @@ def main(page: ft.Page):
     resultado_pesquisa = ft.Container()
     container_associados = ft.Container()
     recomendacao_ui = ft.Container(content=ManualSistema())
+    log_atualizacao = ft.Text(value="Última Atualização em 21/08/25 - 5757 itens", size=14, color=ft.Colors.BLACK)
 
     # ---------------- FUNÇÕES DE APOIO ----------------
     def mostrar_progresso(atual: int, total: int):
@@ -74,7 +74,7 @@ def main(page: ft.Page):
         threading.Thread(
             target=lambda: asyncio.run(
                 atualizador.atualizar_base(
-                    intervalo_codigos=(0, 10000),
+                    intervalo_codigos=(0, 10),
                     progresso_callback=mostrar_progresso,
                     log_callback=mostrar_log,
                 )
@@ -201,14 +201,6 @@ def main(page: ft.Page):
     def atualizar_tabelas(e):
         codigo = (campo_codigo.value or "").strip()
 
-        # validação
-        if not manual_alerta.validar_ou_alertar(campo_codigo):
-            resultado_pesquisa.content = None
-            container_associados.content = None
-            recomendacao_ui.content = ManualSistema()
-            page.update()
-            return
-
         # atualiza
         atualizar_resultado_ui(codigo)
         container_associados.content = tabela_associados.criar_tabela(codigo)
@@ -237,7 +229,7 @@ def main(page: ft.Page):
                         controls=[
                             log_text,
                             ft.Row(
-                                controls=[barra_progresso, pbl],
+                                controls=[barra_progresso, pbl, log_atualizacao],
                                 alignment=ft.MainAxisAlignment.SPACE_EVENLY,
                             ),
                         ]
@@ -277,13 +269,32 @@ def main(page: ft.Page):
         color=ft.Colors.GREY,
     )
 
+
+    # ---------------- LÊ ÚLTIMA ATUALIZAÇÃO ----------------
+    container_logs = ft.Column()
+
+    def _log(msg):
+        container_logs.controls.append(ft.Text(msg))
+        page.update()
+
+    try:
+        with open("ultima_atualizacao.txt", "r", encoding="utf-8") as f:
+            ultima_msg = f.read().strip()
+            if ultima_msg:
+                # Exibe a mensagem no log da interface
+                _log(ultima_msg)  # ou self._log se estiver dentro de uma classe
+            else:
+                _log("Nenhuma atualização registrada ainda.")
+    except FileNotFoundError:
+        _log("Nenhuma atualização registrada ainda.")
+
     # ---------------- MONTA PÁGINA ----------------
     page.add(
         titulo,
         ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
         layout_principal,
         ft.Divider(),
-        barra_status,
+        barra_status
     )
 
 

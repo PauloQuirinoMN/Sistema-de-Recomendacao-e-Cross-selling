@@ -166,7 +166,6 @@ class TabelaAssociados:
 
     def criar_tabela(self, codigo: str):
         df = self.buscar_associados(codigo)
-
         if df.empty:
             return ft.Container(
                 content=ft.Column(
