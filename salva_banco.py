@@ -1,27 +1,41 @@
 import psycopg2
 from psycopg2.extras import execute_values
-from datetime import datetime
 import pandas as pd
 import numpy as np
 from consolidar import salvar_consolidado
 
-def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
-    # Obter código pesquisado
+
+def salvar_no_banco(df_substitutos: pd.DataFrame, df_associados: pd.DataFrame, df_modelo: pd.DataFrame, limite: int = 6):
+    """
+    Insere os produtos substitutos e associados no banco PostgreSQL.
+
+    Parâmetros:
+        df_substitutos (pd.DataFrame): DataFrame de produtos substitutos.
+        df_associados (pd.DataFrame): DataFrame de produtos associados (cross-selling).
+        df_modelo (pd.DataFrame): DataFrame principal contendo produtos e categorias.
+        limite (int): Número máximo de registros a inserir por consulta.
+
+    Observações:
+        - Cria as tabelas se não existirem.
+        - Trata valores nulos e inválidos antes da inserção.
+        - Limita o número de registros inseridos.
+    """
+    # 🔹 Obter código pesquisado
     if df_substitutos.empty:
         print("[INFO] DataFrame de substitutos vazio. Nenhum registro será inserido.")
         return
 
     codigo_pesquisado = str(df_substitutos.iloc[0]["Código pesquisado"])
 
-    # Verificar se código está no df_modelo (produtos ou categorias)
+    # 🔹 Verifica se o código existe no modelo
     codigo_no_produto = codigo_pesquisado in df_modelo["Código produto"].astype(str).values
     codigo_na_categoria = codigo_pesquisado in df_modelo["Categoria"].astype(str).values
 
     if not (codigo_no_produto or codigo_na_categoria):
-        print(f"[INFO] Código '{codigo_pesquisado}' não encontrado em produtos nem categorias no df_modelo. Nenhum registro será inserido.")
+        print(f"[INFO] Código '{codigo_pesquisado}' não encontrado em produtos nem categorias. Nenhum registro será inserido.")
         return
 
-    # Conexão e criação das tabelas com tratamento de erro
+    # 🔹 Conexão com o banco e tratamento de erro
     try:
         conn = psycopg2.connect(
             host="localhost",
@@ -32,11 +46,13 @@ def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
         )
         cur = conn.cursor()
     except Exception as e:
-        print(f"[ERRO] Falha ao conectar ao banco de dados: {e}")
+        print(f"[ERRO] Falha ao conectar ao banco: {e}")
         return
-    # Cria tabela e insere dados consolidados
+
+    # 🔹 Cria tabela de produtos consolidados
     salvar_consolidado(conn, df_modelo)
 
+    # 🔹 Cria tabelas substitutos e associados se não existirem
     cur.execute("""
     CREATE TABLE IF NOT EXISTS produtos_substitutos (
         id SERIAL PRIMARY KEY,
@@ -64,13 +80,14 @@ def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
     );
     """)
 
-    # Trata NaN e valores inválidos antes da inserção
+    # 🔹 Limpeza de NaN
     df_substitutos = df_substitutos.replace({np.nan: None})
     df_associados = df_associados.replace({np.nan: None})
 
+    # 🔹 Preparar valores de substitutos limitados
     df_sub_limited = df_substitutos.head(limite)
-
     substitutos_values = []
+
     for _, row in df_sub_limited.iterrows():
         try:
             substitutos_values.append((
@@ -84,7 +101,7 @@ def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
                 str(row["Categoria"])
             ))
         except Exception as e:
-            print(f"[AVISO] Registro ignorado por erro de conversão: {e}")
+            print(f"[AVISO] Registro de substituto ignorado por erro: {e}")
 
     insert_substitutos = """
         INSERT INTO produtos_substitutos (
@@ -105,10 +122,10 @@ def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
     else:
         print("[INFO] Nenhum substituto válido para inserção.")
 
-    # Evitar erro se df_associados estiver vazio ou sem coluna 'Antecedente'
+    # 🔹 Preparar valores de associados
     if df_associados.empty or "Antecedente" not in df_associados.columns:
         print(f"[INFO] Nenhuma associação encontrada para o código {codigo_pesquisado}.")
-        df_assoc_filtrado = pd.DataFrame()  # cria vazio para evitar erros abaixo
+        df_assoc_filtrado = pd.DataFrame()
     else:
         df_assoc_filtrado = df_associados[
             df_associados["Antecedente"].astype(str) == codigo_pesquisado
@@ -128,7 +145,7 @@ def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
                 float(confianca) if confianca else None
             ))
         except Exception as e:
-            print(f"[AVISO] Registro associado ignorado por erro de conversão: {e}")
+            print(f"[AVISO] Registro associado ignorado por erro: {e}")
 
     insert_associados = """
         INSERT INTO produtos_associados (
@@ -147,6 +164,7 @@ def salvar_no_banco(df_substitutos, df_associados, df_modelo, limite=6):
     else:
         print("[INFO] Nenhum associado válido para inserção.")
 
+    # 🔹 Commit e fechamento da conexão
     conn.commit()
     cur.close()
     conn.close()

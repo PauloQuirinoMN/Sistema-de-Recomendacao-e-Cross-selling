@@ -1,4 +1,3 @@
-import psycopg2
 from psycopg2.extras import execute_values
 import pandas as pd
 
@@ -66,7 +65,6 @@ def salvar_consolidado(conn, df_modelo):
                 quantidade_estoque, margem_bruta, margem_percent, markup
             ) VALUES %s
         """
-        from psycopg2.extras import execute_values
         execute_values(cur, query, valores)
         conn.commit()
         print(f"✅ {len(df)} registros inseridos em produtos_consolidados com sucesso!")
