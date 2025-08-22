@@ -18,33 +18,55 @@ def main(page: ft.Page):
     page.window_prevent_close = True
     page.theme_mode = ft.ThemeMode.LIGHT
 
-    # ---------------- CONEXÃO BANCO ----------------
+    # ---------------- CONEXÃO COM BANCO ----------------
     engine = create_engine(
-        "postgresql+psycopg2://postgres:recomenda@localhost:5432/bd_recomenda"
+        f"postgresql+psycopg2://postgres:recomenda@192.168.6.127:5432/bd_recomenda",
     )
 
     # ---------------- INSTÂNCIAS PRINCIPAIS ----------------
     atualizador = AtualizadorBase()
     tabela_associados = TabelaAssociados(engine)
 
-    # ---------------- ELEMENTOS UI FIXOS ----------------
+    # ---------------- ELEMENTOS DE UI FIXOS ----------------
+    try:
+        with open("ultima_atualizacao.txt", "r", encoding="utf-8") as f:
+            ultima_msg = f.read().strip()
+            if not ultima_msg:
+                ultima_msg = "Nenhuma atualização registrada ainda."
+    except FileNotFoundError:
+        ultima_msg = "Nenhuma atualização registrada ainda."
+
     titulo = ft.Text(
         "Bem-vindo ao Sistema de Recomendações",
         size=20,
         weight=ft.FontWeight.BOLD,
         color=ft.Colors.BLUE_800,
     )
-    barra_progresso = ft.ProgressBar(value=0.0, width=250)
+
+    barra_progresso = ft.ProgressBar(value=0.0, width=350)
     pbl = ft.Text("0%", size=14, weight=ft.FontWeight.BOLD)
     log_text = ft.Text("", size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK)
+    log_atualizacao = ft.Text(value=ultima_msg, size=14, color=ft.Colors.BLACK)
+
+    # 🔹 Sincroniza log_text com a última atualização
+    log_text = ft.Text(ultima_msg, size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK)
+    log_atualizacao = ft.Text(value=ultima_msg, size=14, color=ft.Colors.BLACK)
 
     campo_codigo = ft.TextField(label="Código", hint_text="ex.: 32581")
     resultado_pesquisa = ft.Container()
     container_associados = ft.Container()
     recomendacao_ui = ft.Container(content=ManualSistema())
-    log_atualizacao = ft.Text(value="Última Atualização em 21/08/25 - 5757 itens", size=14, color=ft.Colors.BLACK)
 
     # ---------------- FUNÇÕES DE APOIO ----------------
+    def atualizar_log(data, qtd_itens):
+        """Atualiza log de última atualização"""
+        log_atualizacao.value = f"Última Atualização em {data} - {qtd_itens} itens"
+        log_text.value = log_atualizacao.value
+        page.update()
+
+    # 🔹 Reinstancia o atualizador com callback
+    atualizador = AtualizadorBase(log_callback=atualizar_log)
+
     def mostrar_progresso(atual: int, total: int):
         """Atualiza a barra de progresso durante atualização da base"""
         if total > 50 and atual % max(5, total // 50) != 0:
@@ -61,7 +83,7 @@ def main(page: ft.Page):
         asyncio.run_coroutine_threadsafe(_update(), loop)
 
     def mostrar_log(mensagem: str):
-        """Atualiza log de mensagens"""
+        """Atualiza log de processamento"""
         async def _update():
             log_text.value = mensagem
             page.update()
@@ -70,13 +92,14 @@ def main(page: ft.Page):
         asyncio.run_coroutine_threadsafe(_update(), loop)
 
     def rodar_atualizacao(e):
-        """Thread para atualizar a base sem travar a interface"""
+        """Thread para atualizar a base e interface"""
         threading.Thread(
             target=lambda: asyncio.run(
                 atualizador.atualizar_base(
                     intervalo_codigos=(0, 10),
                     progresso_callback=mostrar_progresso,
                     log_callback=mostrar_log,
+                    fim_callback=atualizar_log,
                 )
             ),
             daemon=True,
@@ -94,7 +117,7 @@ def main(page: ft.Page):
         pesquisa_produto = consultas.PesquisaProduto(engine=engine)
         resultado = pesquisa_produto.buscar_produto(codigo)
 
-        # Caso erro
+        # ---------------- CASO ERRO ----------------
         if isinstance(resultado, dict) and "erro" in resultado:
             resultado_pesquisa.content = ft.Column(
                 [
@@ -107,9 +130,7 @@ def main(page: ft.Page):
                     ft.Text(
                         resultado["erro"],
                         style=ft.TextStyle(
-                            size=18,
-                            color=ft.Colors.RED,
-                            weight=ft.FontWeight.BOLD,
+                            size=18, color=ft.Colors.RED, weight=ft.FontWeight.BOLD
                         ),
                     ),
                 ]
@@ -118,7 +139,7 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # Caso mensagem (não encontrado)
+        # ---------------- CASO MENSAGEM (NÃO ENCONTRADO) ----------------
         if isinstance(resultado, dict) and "mensagem" in resultado:
             resultado_pesquisa.content = ft.Column(
                 [
@@ -131,9 +152,7 @@ def main(page: ft.Page):
                     ft.Text(
                         resultado["mensagem"],
                         style=ft.TextStyle(
-                            size=18,
-                            color=ft.Colors.BLACK,
-                            weight=ft.FontWeight.BOLD,
+                            size=18, color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD
                         ),
                     ),
                 ]
@@ -142,7 +161,7 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # Produto válido
+        # ---------------- PRODUTO VÁLIDO ----------------
         resultado_pesquisa.content = ft.Column(
             [
                 ft.Text(
@@ -153,39 +172,60 @@ def main(page: ft.Page):
                 ),
                 ft.Text(
                     spans=[
-                        ft.TextSpan(f"Item {resultado['codigo_produto']} - "),
+                        ft.TextSpan(
+                            f"Item {resultado['codigo_produto']} - ",
+                            style=ft.TextStyle(
+                                size=16,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.BLACK45,
+                            ),
+                        ),
                         ft.TextSpan(
                             f"{resultado['descricao_produto']}",
                             style=ft.TextStyle(
-                                size=18,
-                                weight="bold",
-                                color=ft.Colors.BLUE,
+                                size=18, weight="bold", color=ft.Colors.BLACK87
                             ),
                         ),
-                        ft.TextSpan(" - Valor "),
+                        ft.TextSpan(
+                            " - Valor ",
+                            style=ft.TextStyle(
+                                size=16, color=ft.Colors.BLACK45, weight=ft.FontWeight.BOLD
+                            ),
+                        ),
                         ft.TextSpan(
                             f"R$ {resultado['valor_unitario']}",
                             style=ft.TextStyle(
-                                size=18,
-                                weight="bold",
-                                color=ft.Colors.BLUE,
+                                size=18, weight="bold", color=ft.Colors.BLACK87
                             ),
                         ),
-                        ft.TextSpan(", tem uma Margem "),
+                        ft.TextSpan(
+                            ", uma Margem de ",
+                            style=ft.TextStyle(
+                                size=16, color=ft.Colors.BLACK45, weight=ft.FontWeight.BOLD
+                            ),
+                        ),
                         ft.TextSpan(
                             f"{resultado['margem_percent']} %",
                             style=ft.TextStyle(
-                                size=18,
-                                weight="bold",
-                                color=ft.Colors.BLUE,
+                                size=18, weight="bold", color=ft.Colors.BLACK87
                             ),
                         ),
                         ft.TextSpan(
-                            f" com estoque de {resultado['quantidade_estoque']} unidades.",
+                            " com estoque de - ",
                             style=ft.TextStyle(
-                                size=18,
-                                weight="bold",
-                                color=ft.Colors.BLUE,
+                                size=16, weight="bold", color=ft.Colors.BLACK45
+                            ),
+                        ),
+                        ft.TextSpan(
+                            f"{resultado['quantidade_estoque']}",
+                            style=ft.TextStyle(
+                                size=18, weight="bold", color=ft.Colors.BLACK87
+                            ),
+                        ),
+                        ft.TextSpan(
+                            " unidades.",
+                            style=ft.TextStyle(
+                                size=16, weight="bold", color=ft.Colors.BLACK45
                             ),
                         ),
                     ],
@@ -200,17 +240,13 @@ def main(page: ft.Page):
 
     def atualizar_tabelas(e):
         codigo = (campo_codigo.value or "").strip()
-
-        # atualiza
         atualizar_resultado_ui(codigo)
         container_associados.content = tabela_associados.criar_tabela(codigo)
         container_associados.update()
 
     # ---------------- BARRA DE AÇÕES ----------------
     botao_atualizar = ft.IconButton(
-        icon=ft.Icons.UPDATE_SHARP,
-        tooltip="Atualizar bases de dados",
-        on_click=rodar_atualizacao,
+        icon=ft.Icons.UPDATE_SHARP, tooltip="Atualizar bases de dados", on_click=rodar_atualizacao
     )
     botao_pesquisar = ft.TextButton(
         content=ft.Row([ft.Icon(ft.Icons.SEARCH, size=20), ft.Text("Pesquisar")]),
@@ -229,7 +265,7 @@ def main(page: ft.Page):
                         controls=[
                             log_text,
                             ft.Row(
-                                controls=[barra_progresso, pbl, log_atualizacao],
+                                controls=[barra_progresso, pbl],
                                 alignment=ft.MainAxisAlignment.SPACE_EVENLY,
                             ),
                         ]
@@ -269,7 +305,6 @@ def main(page: ft.Page):
         color=ft.Colors.GREY,
     )
 
-
     # ---------------- LÊ ÚLTIMA ATUALIZAÇÃO ----------------
     container_logs = ft.Column()
 
@@ -280,14 +315,10 @@ def main(page: ft.Page):
     try:
         with open("ultima_atualizacao.txt", "r", encoding="utf-8") as f:
             ultima_msg = f.read().strip()
-            if ultima_msg:
-                # Exibe a mensagem no log da interface
-                _log(ultima_msg)  # ou self._log se estiver dentro de uma classe
-            else:
-                _log("Nenhuma atualização registrada ainda.")
+            _log(ultima_msg if ultima_msg else "Nenhuma atualização registrada ainda.")
     except FileNotFoundError:
         _log("Nenhuma atualização registrada ainda.")
-
+    
     # ---------------- MONTA PÁGINA ----------------
     page.add(
         titulo,

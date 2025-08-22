@@ -20,27 +20,16 @@ class ManualSistema(ft.Container):
                     size=16
                 ),
 
-                ft.Text("🔍 Como Pesquisar", size=20, weight="bold"),
+                ft.Text("🔍 Como Funciona", size=20, weight="bold"),
                 ft.Text(
-                    "- Digite um código de produto ou código de categoria no campo de pesquisa.\n"
+                    "- Digite um código de produto no campo de pesquisa.\n"
                     "- Clique no botão pesquisar.\n"
-                    "- O sistema informará os resultados.",
-                    text_align=ft.TextAlign.JUSTIFY,
-                    size=16
-                ),
-
-                ft.Text("📊 Resultados", size=20, weight="bold"),
-                ft.Text(
-                    "Caso 1: Produto Encontrado → Exibe dados completos do item, lista de substitutos e associados.\n"
-                    "Caso 2: Código Inválido → Mensagem informativa será exibida.",
-                    text_align=ft.TextAlign.JUSTIFY,
-                    size=16
-                ),
-
-                ft.Text("⚡ Funcionalidades", size=20, weight="bold"),
-                ft.Text(
-                    "- Botão Limpar → Volta à página inicial com manual.\n"
-                    "- Botão Atualizar Base → Recarrega dados mais recentes para alimentar o sistema.",
+                    "- O sistema irá mostrar as informações do produto pesquisado\n." \
+                    "  Se o código for inválido, uma mensagem de erro será exibida.\n" \
+                    "- Caso o produto seja encontrado, serão exibidos:\n    " \
+                    "- duas tabelas:\n\n" \
+                    "      1. Substitutos → Itens similares com informações de preço e margem.\n"
+                    '      2. Associados → Produtos frequentemente comprados juntos.\n',
                     text_align=ft.TextAlign.JUSTIFY,
                     size=16
                 ),

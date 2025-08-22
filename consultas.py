@@ -122,7 +122,8 @@ class TabelaRecomendacao:
                         heading_row_height=40,
                         data_row_color={"hovered": ft.Colors.BLUE_GREY_100},
                         show_checkbox_column=False,
-                        width=750,
+                        expand=True
+                        # width=950,
                     ),
                 ],
                 spacing=10
@@ -223,7 +224,8 @@ class TabelaAssociados:
                         heading_row_height=40,
                         data_row_color={"hovered": ft.Colors.BLUE_GREY_100},
                         show_checkbox_column=False,
-                        width=850,
+                        expand=True
+                        # width=950,
                     ),
                 ],
                 spacing=10
