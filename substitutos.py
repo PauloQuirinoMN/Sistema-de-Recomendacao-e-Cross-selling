@@ -9,6 +9,7 @@ class RecomendadorSubstituto:
         - Calcula similaridade baseada em preço e margem.
         - Garante consistência na formatação da saída.
     """
+    ''
     
     def __init__(self, df: pd.DataFrame):
         self.df = df.drop_duplicates(subset='Código produto')

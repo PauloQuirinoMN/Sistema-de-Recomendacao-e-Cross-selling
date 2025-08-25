@@ -10,6 +10,7 @@ class EstoqueCleaner:
     - Remover produtos, categorias e marcas com múltiplos códigos inconsistentes.
     - Ajustar tipos de dados e renomear colunas finais.
     """
+    ''
 
     def __init__(self):
         # Colunas utilizadas no processo de limpeza

@@ -1,5 +1,4 @@
 import pandas as pd
-import time
 from datetime import timedelta, datetime
 from limpeza_estoque import EstoqueCleaner
 from limpeza_notas import NotasCleaner

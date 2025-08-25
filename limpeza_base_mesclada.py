@@ -6,6 +6,7 @@ class BasePreparador:
     Classe responsável por mesclar e preparar a base final de dados
     a partir das notas fiscais e do estoque já limpo.
     """
+    ''
 
     def __init__(self):
         self.df_completo = None

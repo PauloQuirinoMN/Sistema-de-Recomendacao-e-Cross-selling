@@ -246,7 +246,7 @@ def main(page: ft.Page):
 
     # ---------------- BARRA DE AÇÕES ----------------
     botao_atualizar = ft.IconButton(
-        icon=ft.Icons.UPDATE_SHARP, tooltip="Atualizar bases de dados", on_click=rodar_atualizacao
+        icon=ft.Icons.UPDATE_SHARP, tooltip="Atualizar bases de dados", on_click=rodar_atualizacao, disabled=False
     )
     botao_pesquisar = ft.TextButton(
         content=ft.Row([ft.Icon(ft.Icons.SEARCH, size=20), ft.Text("Pesquisar")]),

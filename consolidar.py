@@ -6,6 +6,7 @@ def salvar_consolidado(conn, df_modelo):
     Salva todo o df_modelo na tabela produtos_consolidados.
     Só insere os dados se a tabela estiver vazia.
     """
+    ''
     colunas = [
         'Numero nota fiscal', 'Data da venda', 'Código produto', 'Descrição do produto',
         'Quantidade do produto', 'Valor unitário', 'Preço de custo', 'Valor total produto',
