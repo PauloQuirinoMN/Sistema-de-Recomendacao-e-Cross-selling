@@ -24,7 +24,7 @@ class PesquisaProduto:
             SELECT
                 codigo_produto,
                 descricao_produto,
-                valor_unitario,
+              
                 margem_percent,
                 quantidade_estoque
             FROM produtos_consolidados
@@ -45,7 +45,7 @@ class PesquisaProduto:
         return {
             "codigo_produto": row["codigo_produto"],
             "descricao_produto": row["descricao_produto"],
-            "valor_unitario": row["valor_unitario"],
+           
             "margem_percent": row["margem_percent"],
             "quantidade_estoque": row["quantidade_estoque"],
         }
@@ -61,7 +61,7 @@ class TabelaRecomendacao:
             SELECT 
                 produto_recomendado_cod, 
                 produto_recomendado_des, 
-                valor_unitario, 
+               
                 margem_percentual, 
                 estoque
             FROM produtos_substitutos
@@ -88,7 +88,7 @@ class TabelaRecomendacao:
                     cells=[
                         ft.DataCell(ft.Text(str(row["produto_recomendado_cod"]))),
                         ft.DataCell(ft.Text(str(row["produto_recomendado_des"]))),
-                        ft.DataCell(ft.Text(str(row["valor_unitario"]))),
+                       
                         ft.DataCell(ft.Text(str(row["margem_percentual"]))),
                         ft.DataCell(ft.Text(str(row["estoque"]))),
                     ],
@@ -109,7 +109,7 @@ class TabelaRecomendacao:
                         columns=[
                             ft.DataColumn(ft.Text("Código", weight=ft.FontWeight.BOLD)),
                             ft.DataColumn(ft.Text("Descrição", weight=ft.FontWeight.BOLD)),
-                            ft.DataColumn(ft.Text("Valor Unitário", weight=ft.FontWeight.BOLD), numeric=True),
+                            
                             ft.DataColumn(ft.Text("Margem %", weight=ft.FontWeight.BOLD), numeric=True),
                             ft.DataColumn(ft.Text("Estoque", weight=ft.FontWeight.BOLD), numeric=True),
                         ],
@@ -148,7 +148,7 @@ class TabelaAssociados:
                 a.produto_associado_des,
                 a.suporte AS frequencia,
                 a.confianca AS conversao,
-                c.valor_unitario,
+         
                 c.margem_percent AS margem_percentual,
                 c.quantidade_estoque
             FROM produtos_associados a
@@ -186,7 +186,7 @@ class TabelaAssociados:
                     cells=[
                         ft.DataCell(ft.Text(str(row["produto_associado_cod"]))),
                         ft.DataCell(ft.Text(str(row["produto_associado_des"]))),
-                        ft.DataCell(ft.Text(f'R$ {row["valor_unitario"]:.2f}'.replace(".", ","))),
+                    
                         ft.DataCell(ft.Text(f'{row["margem_percentual"]:.1f}%')),
                         ft.DataCell(ft.Text(f'{row["frequencia"]:.0f}%')),
                         ft.DataCell(ft.Text(f'{row["conversao"]:.0f}%')),
@@ -208,7 +208,7 @@ class TabelaAssociados:
                         columns=[
                             ft.DataColumn(ft.Text("Código", weight=ft.FontWeight.BOLD)),
                             ft.DataColumn(ft.Text("Descrição", weight=ft.FontWeight.BOLD)),
-                            ft.DataColumn(ft.Text("V. Unitário", weight=ft.FontWeight.BOLD), numeric=True),
+                           
                             ft.DataColumn(ft.Text("Margem %", weight=ft.FontWeight.BOLD), numeric=True),
                             ft.DataColumn(ft.Text("Aparecem Juntos", weight=ft.FontWeight.BOLD), numeric=True,
                                           tooltip="Frequência que aparecem juntos nas vendas"),

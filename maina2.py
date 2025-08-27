@@ -186,18 +186,18 @@ def main(page: ft.Page):
                                 size=18, weight="bold", color=ft.Colors.BLACK87
                             ),
                         ),
-                        ft.TextSpan(
-                            " - Valor ",
-                            style=ft.TextStyle(
-                                size=16, color=ft.Colors.BLACK45, weight=ft.FontWeight.BOLD
-                            ),
-                        ),
-                        ft.TextSpan(
-                            f"R$ {resultado['valor_unitario']}",
-                            style=ft.TextStyle(
-                                size=18, weight="bold", color=ft.Colors.BLACK87
-                            ),
-                        ),
+                        # ft.TextSpan(
+                        #     " - Valor ",
+                        #     style=ft.TextStyle(
+                        #         size=16, color=ft.Colors.BLACK45, weight=ft.FontWeight.BOLD
+                        #     ),
+                        # ),
+                        # ft.TextSpan(
+                        #     f"R$ {resultado['valor_unitario']}",
+                        #     style=ft.TextStyle(
+                        #         size=18, weight="bold", color=ft.Colors.BLACK87
+                        #     ),
+                        # ),
                         ft.TextSpan(
                             ", uma Margem de ",
                             style=ft.TextStyle(
