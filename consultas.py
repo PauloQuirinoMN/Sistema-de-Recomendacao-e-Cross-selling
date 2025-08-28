@@ -7,7 +7,7 @@ import flet as ft
 class PesquisaProduto:
     def __init__(self, engine=None):
         self.engine = engine or create_engine(
-            "postgresql+psycopg2://postgres:recomenda@localhost:5432/bd_recomenda"
+            "postgresql+psycopg2://postgres:recomenda@192.168.0.200:5432/rec"
         )
 
     @staticmethod
@@ -100,7 +100,7 @@ class TabelaRecomendacao:
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text("PRODUTOS RECOMENDADOS", 
+                    ft.Text("POSSÍVEIS PRODUTOS SUBSTITUTOS", 
                             size=16, 
                             weight=ft.FontWeight.BOLD,
                             color=ft.Colors.BLUE_800),
@@ -199,7 +199,7 @@ class TabelaAssociados:
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text(f"PRODUTOS QUE NORMALMENTE SÃO COMPRADOS JUNTOS COM {codigo}", 
+                    ft.Text(f"PRODUTOS QUE NORMALMENTE SÃO COMPRADOS JUNTOS ", 
                             size=16, 
                             weight=ft.FontWeight.BOLD,
                             color=ft.Colors.BLUE_800),

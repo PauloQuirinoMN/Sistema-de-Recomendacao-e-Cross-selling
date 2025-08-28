@@ -20,7 +20,7 @@ def main(page: ft.Page):
 
     # ---------------- CONEXÃO COM BANCO ----------------
     engine = create_engine(
-        f"postgresql+psycopg2://postgres:recomenda@192.168.6.127:5432/bd_recomenda",
+        f"postgresql+psycopg2://postgres:dev2025@192.168.0.200:5432/rec",
     )
 
     # ---------------- INSTÂNCIAS PRINCIPAIS ----------------
@@ -96,7 +96,7 @@ def main(page: ft.Page):
         threading.Thread(
             target=lambda: asyncio.run(
                 atualizador.atualizar_base(
-                    intervalo_codigos=(0, 10),
+                    intervalo_codigos=(0, 15),
                     progresso_callback=mostrar_progresso,
                     log_callback=mostrar_log,
                     fim_callback=atualizar_log,

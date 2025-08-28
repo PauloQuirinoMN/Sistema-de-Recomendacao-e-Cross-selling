@@ -52,7 +52,7 @@ class RecomendadorSubstituto:
                 0.7 * (1 - (substitutos['Valor unitário'] - produto_base['Valor unitário']).abs() / produto_base['Valor unitário']) +
                 0.3 * (1 - (substitutos['Margem %'] - produto_base['Margem %']).abs())
             )
-            return self._formatar_resultado(produto_base, substitutos.nsmallest(n, 'similaridade'))
+            return self._formatar_resultado(produto_base, substitutos.nlargest(n, 'similaridade'))
 
         print("⚠️ Nenhum substituto na mesma categoria.")
         return self._formatar_resultado(produto_base, self._recomendar_alternativas(n))
@@ -78,7 +78,7 @@ class RecomendadorSubstituto:
     # ---------------- Alternativas gerais ----------------
     def _recomendar_alternativas(self, n: int) -> pd.DataFrame:
         """Seleciona aleatoriamente produtos disponíveis como alternativas gerais"""
-        alternativas = self.df[self.df['Quantidade estoque'] > 0].sample(min(n, len(self.df)))
+        alternativas = self.df[self.df['Quantidade estoque'] > 0].sample(min(n, len(self.df[self.df['Quantidade estoque'] > 0])))
         return alternativas
 
     # ---------------- Formatação de resultado ----------------

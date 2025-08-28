@@ -38,10 +38,10 @@ def salvar_no_banco(df_substitutos: pd.DataFrame, df_associados: pd.DataFrame, d
     # 🔹 Conexão com o banco e tratamento de erro
     try:
         conn = psycopg2.connect(
-            host="localhost",
-            dbname="bd_recomenda",
+            host="192.168.0.200",
+            dbname="rec",
             user="postgres",
-            password="recomenda",
+            password="dev2025",
             port=5432
         )
         cur = conn.cursor()
