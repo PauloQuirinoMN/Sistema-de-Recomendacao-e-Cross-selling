@@ -9,8 +9,7 @@ class RecomendadorSubstituto:
         - Calcula similaridade baseada em preço e margem.
         - Garante consistência na formatação da saída.
     """
-    ''
-    
+
     def __init__(self, df: pd.DataFrame):
         self.df = df.drop_duplicates(subset='Código produto')
         self.categorias_validas = df['Código da categoria'].unique()
@@ -46,6 +45,9 @@ class RecomendadorSubstituto:
             (self.df['Quantidade estoque'] > 0)
         ].copy()
 
+        # 🔹 Remove duplicados por código
+        substitutos = substitutos.drop_duplicates(subset='Código produto')
+
         if not substitutos.empty:
             # Calcula similaridade ponderando preço e margem
             substitutos['similaridade'] = (
@@ -62,7 +64,10 @@ class RecomendadorSubstituto:
         produtos_categoria = self.df[
             (self.df['Código da categoria'] == cod_categoria) &
             (self.df['Quantidade estoque'] > 0)
-        ]
+        ].copy()
+
+        # 🔹 Remove duplicados por código
+        produtos_categoria = produtos_categoria.drop_duplicates(subset='Código produto')
 
         if not produtos_categoria.empty:
             categoria_nome = produtos_categoria.iloc[0]['Categoria']
@@ -78,8 +83,9 @@ class RecomendadorSubstituto:
     # ---------------- Alternativas gerais ----------------
     def _recomendar_alternativas(self, n: int) -> pd.DataFrame:
         """Seleciona aleatoriamente produtos disponíveis como alternativas gerais"""
-        alternativas = self.df[self.df['Quantidade estoque'] > 0].sample(min(n, len(self.df[self.df['Quantidade estoque'] > 0])))
-        return alternativas
+        alternativas = self.df[self.df['Quantidade estoque'] > 0].copy()
+        alternativas = alternativas.drop_duplicates(subset='Código produto')
+        return alternativas.sample(min(n, len(alternativas)))
 
     # ---------------- Formatação de resultado ----------------
     def _formatar_resultado(self, produto_base, recomendacoes: pd.DataFrame) -> pd.DataFrame:
@@ -97,7 +103,7 @@ class RecomendadorSubstituto:
         cols = ['Código produto', 'Descrição do produto', 'Valor unitário', 
                 'Margem %', 'Quantidade estoque', 'Categoria']
 
-        recomendacoes = recomendacoes[cols].copy()
+        recomendacoes = recomendacoes[cols].copy().reset_index(drop=True)
         recomendacoes['Valor unitário'] = recomendacoes['Valor unitário'].round(2)
         recomendacoes['Margem %'] = (recomendacoes['Margem %'] * 100).round(2)
 

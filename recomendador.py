@@ -17,13 +17,12 @@ class RecomendadorCrossSelling:
             df (pd.DataFrame): Base de vendas e produtos.
         """
         self.df = df
-
     def gerar_regras(
             self,
             cod_produto: int,
-            min_support: float = 0.01,
-            min_confidence: float = 0.15,
-            min_lift: float = 1.1,
+            min_support: float = 0.005,
+            min_confidence: float = 0.1,
+            min_lift: float = 1.0,
             max_len: int = 2
         ) -> pd.DataFrame:
         """
@@ -32,13 +31,14 @@ class RecomendadorCrossSelling:
         Parâmetros:
             cod_produto (int): Código do produto a analisar.
             min_support (float): Suporte mínimo para o Apriori.
-            min_confidence (float): Confiança mínima para regras.
-            min_lift (float): Lift mínimo para considerar uma associação válida.
+            min_confidence (float): Confiança mínima das regras.
+            min_lift (float): Lift mínimo das regras.
             max_len (int): Número máximo de itens por conjunto.
 
         Retorna:
             pd.DataFrame: Regras de associação filtradas pelo produto.
         """
+
         # 🔹 Filtrar notas contendo o produto pesquisado
         notas_com_produto = self.df[self.df['Código produto'] == cod_produto]['Numero nota fiscal'].unique()
         df_filtrado = self.df[self.df['Numero nota fiscal'].isin(notas_com_produto)]
@@ -56,24 +56,22 @@ class RecomendadorCrossSelling:
         if frequent_itemsets.empty:
             return pd.DataFrame()
 
-        # 🔹 Gerar regras de associação usando "confidence"
+        # 🔹 Gerar regras de associação (confidence e lift)
         rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)
-
-        # 🔹 Filtrar apenas regras com lift mínimo
         rules = rules[rules["lift"] >= min_lift]
 
+        cod_produto = int(cod_produto)
+
         # 🔹 Filtrar regras relacionadas ao produto pesquisado
-        produto_str = str(cod_produto)
         regras_produto = rules[
-            rules["antecedents"].apply(lambda x: produto_str in str(x)) |
-            rules["consequents"].apply(lambda x: produto_str in str(x))
+            rules['antecedents'].apply(lambda x: cod_produto in x) |
+            rules['consequents'].apply(lambda x: cod_produto in x)
         ]
 
-        # 🔹 Ordenar para destacar as melhores regras
-        regras_produto = regras_produto.sort_values(by=["confidence", "lift"], ascending=[False, False])
+        # 🔹 Ordenar (primeiro por lift, depois por confiança)
+        regras_produto = regras_produto.sort_values(by=["lift", "confidence"], ascending=[False, False])
 
         return regras_produto
-
 
     def formatar_regras(self, df_regras: pd.DataFrame) -> pd.DataFrame:
         """
