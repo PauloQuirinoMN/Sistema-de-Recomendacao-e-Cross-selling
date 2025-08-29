@@ -81,6 +81,9 @@ class TabelaRecomendacao:
         if df.empty:
             return ft.Text("Nenhum produto recomendado encontrado.", color=ft.Colors.RED)
 
+        # 🔹 Remove duplicados para evitar repetição de produtos
+        df = df.drop_duplicates(subset='produto_recomendado_cod').reset_index(drop=True)
+
         rows = []
         for _, row in df.iterrows():
             rows.append(
@@ -88,7 +91,7 @@ class TabelaRecomendacao:
                     cells=[
                         ft.DataCell(ft.Text(str(row["produto_recomendado_cod"]))),
                         ft.DataCell(ft.Text(str(row["produto_recomendado_des"]))),
-                       
+                    
                         ft.DataCell(ft.Text(str(row["margem_percentual"]))),
                         ft.DataCell(ft.Text(str(row["estoque"]))),
                     ],
@@ -123,7 +126,6 @@ class TabelaRecomendacao:
                         data_row_color={"hovered": ft.Colors.BLUE_GREY_100},
                         show_checkbox_column=False,
                         expand=True
-                        # width=950,
                     ),
                 ],
                 spacing=10
@@ -131,6 +133,7 @@ class TabelaRecomendacao:
             padding=ft.padding.symmetric(vertical=10, horizontal=15),
             margin=ft.margin.only(bottom=15),
         )
+
 
 
 # CLASSE PARA TABELA DE ASSOCIADOS
@@ -179,6 +182,10 @@ class TabelaAssociados:
                 margin=ft.margin.only(bottom=15),
             )
 
+        # 🔹 Remove duplicados para segurança
+        df = df.drop_duplicates(subset='produto_associado_cod').reset_index(drop=True)
+
+        # ---------------- Monta as linhas da tabela ----------------
         rows = []
         for _, row in df.iterrows():
             rows.append(
@@ -186,16 +193,15 @@ class TabelaAssociados:
                     cells=[
                         ft.DataCell(ft.Text(str(row["produto_associado_cod"]))),
                         ft.DataCell(ft.Text(str(row["produto_associado_des"]))),
-                    
                         ft.DataCell(ft.Text(f'{row["margem_percentual"]:.1f}%')),
-                        ft.DataCell(ft.Text(f'{row["frequencia"]:.0f}%')),
-                        ft.DataCell(ft.Text(f'{row["conversao"]:.0f}%')),
+                        ft.DataCell(ft.Text(f'{row["conversao"]:.0f}%')),  # Apenas "Comprados Juntos"
                     ],
                     on_select_changed=lambda e, cod=row["produto_associado_cod"]: 
                         print(f"Produto associado selecionado: {cod}")
                 )
             )
 
+        # ---------------- Cria DataTable ----------------
         return ft.Container(
             content=ft.Column(
                 controls=[
@@ -208,12 +214,9 @@ class TabelaAssociados:
                         columns=[
                             ft.DataColumn(ft.Text("Código", weight=ft.FontWeight.BOLD)),
                             ft.DataColumn(ft.Text("Descrição", weight=ft.FontWeight.BOLD)),
-                           
                             ft.DataColumn(ft.Text("Margem %", weight=ft.FontWeight.BOLD), numeric=True),
-                            ft.DataColumn(ft.Text("Aparecem Juntos", weight=ft.FontWeight.BOLD), numeric=True,
-                                          tooltip="Frequência que aparecem juntos nas vendas"),
                             ft.DataColumn(ft.Text("Comprados Juntos", weight=ft.FontWeight.BOLD), numeric=True,
-                                          tooltip="Taxa de conversão quando aparecem juntos"),
+                                        tooltip="Taxa de conversão quando aparecem juntos"),
                         ],
                         rows=rows,
                         border=ft.border.all(1, ft.Colors.BLUE_GREY_200),
@@ -225,7 +228,6 @@ class TabelaAssociados:
                         data_row_color={"hovered": ft.Colors.BLUE_GREY_100},
                         show_checkbox_column=False,
                         expand=True
-                        # width=950,
                     ),
                 ],
                 spacing=10
@@ -233,3 +235,4 @@ class TabelaAssociados:
             padding=ft.padding.symmetric(vertical=10, horizontal=15),
             margin=ft.margin.only(bottom=15),
         )
+

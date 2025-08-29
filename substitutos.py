@@ -73,7 +73,7 @@ class RecomendadorSubstituto:
             categoria_nome = produtos_categoria.iloc[0]['Categoria']
             print(f"ℹ️ Categoria {categoria_nome} encontrada.")
             return self._formatar_resultado(
-                produtos_categoria.iloc[0], 
+                produtos_categoria.iloc[0],
                 produtos_categoria.sample(min(n, len(produtos_categoria)))
             )
 
@@ -94,6 +94,7 @@ class RecomendadorSubstituto:
         - Valores monetários arredondados
         - Margem percentual em %
         - Colunas padronizadas
+        - Remove produtos duplicados
         """
         if produto_base is not None:
             print(f"\n🔄 Produto pesquisado: {produto_base['Código produto']} ({produto_base['Descrição do produto']})")
@@ -103,7 +104,7 @@ class RecomendadorSubstituto:
         cols = ['Código produto', 'Descrição do produto', 'Valor unitário', 
                 'Margem %', 'Quantidade estoque', 'Categoria']
 
-        recomendacoes = recomendacoes[cols].copy().reset_index(drop=True)
+        recomendacoes = recomendacoes[cols].drop_duplicates(subset='Código produto').reset_index(drop=True)
         recomendacoes['Valor unitário'] = recomendacoes['Valor unitário'].round(2)
         recomendacoes['Margem %'] = (recomendacoes['Margem %'] * 100).round(2)
 

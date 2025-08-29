@@ -96,7 +96,7 @@ def main(page: ft.Page):
         threading.Thread(
             target=lambda: asyncio.run(
                 atualizador.atualizar_base(
-                    intervalo_codigos=(0, 11),
+                    intervalo_codigos=(0, 20),
                     progresso_callback=mostrar_progresso,
                     log_callback=mostrar_log,
                     fim_callback=atualizar_log,

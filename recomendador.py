@@ -20,8 +20,8 @@ class RecomendadorCrossSelling:
     def gerar_regras(
             self,
             cod_produto: int,
-            min_support: float = 0.005,
-            min_confidence: float = 0.1,
+            min_support: float = 0.0015,
+            min_confidence: float = 0.05,
             min_lift: float = 1.0,
             max_len: int = 2
         ) -> pd.DataFrame:
