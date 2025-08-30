@@ -44,7 +44,7 @@ class BasePreparador:
         # 🔹 Cálculos de métricas financeiras
         df["Margem bruta"] = (df["Valor unitário"] - df["Preço de custo"]).round(2)
         df["Margem %"] = (df["Margem bruta"] / df["Valor unitário"]).round(2)
-        df["Markup"] = (df["Valor unitário"] - df["Preço de custo"]).round(2)
+        df["Markup"] = (df["Valor unitário"] / df["Preço de custo"]).round(2)
 
         # 🔹 Conversões de tipos e datas
         df["Data da venda"] = pd.to_datetime(df["Data da venda"], format="%d/%m/%Y")
