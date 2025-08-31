@@ -239,24 +239,33 @@ def main(page: ft.Page):
         page.update()
 
     def atualizar_tabelas(e):
-        codigo = (campo_codigo.value or "").strip()
+        codigo = (campo_pesquisar.value or "").strip()
         atualizar_resultado_ui(codigo)
         container_associados.content = tabela_associados.criar_tabela(codigo)
         container_associados.update()
 
     # ---------------- BARRA DE AÇÕES ----------------
     botao_atualizar = ft.IconButton(
-        icon=ft.Icons.UPDATE_SHARP, tooltip="Atualizar bases de dados", on_click=rodar_atualizacao, disabled=False
+        icon=ft.Icons.UPDATE_SHARP, tooltip="Atualizar bases de dados", on_click=rodar_atualizacao, disabled=True
     )
-    botao_pesquisar = ft.TextButton(
-        content=ft.Row([ft.Icon(ft.Icons.SEARCH, size=20), ft.Text("Pesquisar")]),
-        on_click=atualizar_tabelas,
+
+    campo_pesquisar = ft.TextField(
+        label="Código",
+        prefix_icon=ft.Icons.SEARCH,
+        on_submit=atualizar_tabelas,
+        content_padding=ft.padding.only(left=10),
+        border_color=ft.Colors.TRANSPARENT,
+        filled=True,
+        bgcolor=ft.Colors.WHITE,
+        height=40,
+        width=200,
+        text_size=14,
     )
 
     barra_pesquisa = ft.Row(
         [
-            campo_codigo,
-            botao_pesquisar,
+            # campo_codigo,
+            campo_pesquisar,
             ft.TextButton(text="Limpar pesquisa", on_click=limpar_pesquisa),
             ft.Row(
                 [

@@ -216,7 +216,7 @@ class TabelaAssociados:
                             ft.DataColumn(ft.Text("Descrição", weight=ft.FontWeight.BOLD)),
                             ft.DataColumn(ft.Text("Margem %", weight=ft.FontWeight.BOLD), numeric=True),
                             ft.DataColumn(ft.Text("Comprados Juntos", weight=ft.FontWeight.BOLD), numeric=True,
-                                        tooltip="Taxa de conversão quando aparecem juntos"),
+                                        tooltip="quantos % formam comprados juntos!"),
                         ],
                         rows=rows,
                         border=ft.border.all(1, ft.Colors.BLUE_GREY_200),
