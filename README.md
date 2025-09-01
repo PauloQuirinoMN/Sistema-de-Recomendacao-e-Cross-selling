@@ -195,24 +195,18 @@ python main.py
 
 ## Diagrama visual de fluxo de dados do sistema
 
+## Diagrama visual de fluxo de dados do sistema
+
 main.py (UI Flet)
-│
-├─> alimentador_banco2.py (Atualiza base de dados)
-│ │
-│ └─> limpeza_estoque.py
-│ │
-│ └─> limpeza_notas.py
-│ │
-│ └─> limpeza_base_mesclada.py
-│ │
-│ └─> substitutos.py
-│ │
-│ └─> recomendador.py (cross-selling)
-│ │
-│ └─> salva_banco.py
-│ │
-│ └─> consolidar.py
-│
-└─> consultas.py (busca produtos e gera tabelas de recomendação)
-├─> TabelaRecomendacao
-└─> TabelaAssociados
+    ├─> alimentador_banco2.py (Atualiza base de dados)
+    │       ├─> limpeza_estoque.py
+    │       │       └─> limpeza_notas.py
+    │       │               └─> limpeza_base_mesclada.py
+    │       │                       └─> substitutos.py
+    │       │                               └─> recomendador.py (cross-selling)
+    │       │                                       └─> salva_banco.py
+    │       │                                               └─> consolidar.py
+    │
+    └─> consultas.py (busca produtos e gera tabelas de recomendação)
+            ├─> TabelaRecomendacao
+            └─> TabelaAssociados
