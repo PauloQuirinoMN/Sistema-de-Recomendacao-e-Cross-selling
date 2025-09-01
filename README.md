@@ -70,7 +70,7 @@ Sistema desenvolvido em Python para fornecer recomendações de produtos em vend
 - Certifique-se que o usuário tenha permissões de leitura e escrita.
 
 ### 2. Instalar Dependências
-```bash
+
 pip install -r requirements.txt
 
 ### 3. Preparar Bases de Dados
@@ -82,7 +82,7 @@ pip install -r requirements.txt
 
 ### 4. Executar o Sistema
 
-```bash
+
 python main.py
 
 ### 5. Uso da Interface
