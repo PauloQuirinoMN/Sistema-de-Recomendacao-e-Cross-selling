@@ -44,24 +44,28 @@ Sistema desenvolvido em Python para fornecer recomendações de produtos em vend
   - SQLAlchemy==2.0.43
 - **Banco de Dados**: PostgreSQL 15+
 
+- 
 ## ⚙️ Estrutura do Projeto
-├── assets/ # Arquivos de mídia ou ícones da interface
-├── bases/ # Arquivos Excel de estoque e notas fiscais
-├── venv/ # Ambiente virtual Python
-├── .gitignore # Arquivos e pastas ignorados pelo Git
-├── alimentador_banco2.py # Carrega, limpa e prepara a base; gera substitutos e associados
-├── consolidar.py # Consolida dados em tabela única de produtos
-├── consultas.py # Classes de busca e criação de tabelas de recomendação
+``` 
+├── assets/                  # Arquivos de mídia ou ícones da interface
+├── bases/                   # Arquivos Excel de estoque e notas fiscais
+├── venv/                    # Ambiente virtual Python
+├── .gitignore               # Arquivos e pastas ignorados pelo Git
+├── alimentador_banco2.py    # Carrega, limpa e prepara a base; gera substitutos e associados
+├── consolidar.py            # Consolida dados em tabela única de produtos
+├── consultas.py             # Classes de busca e criação de tabelas de recomendação
 ├── limpeza_base_mesclada.py # Limpeza e preparação da base mesclada
-├── limpeza_estoque.py # Limpeza da base de estoque
-├── limpeza_notas.py # Limpeza da base de notas fiscais
-├── main.py # Interface principal (Flet)
-├── manual.py # Componente UI com instruções do sistema
-├── recomendador.py # Regras de associação e cross-selling
-├── requirements.txt # Dependências do projeto
-├── salva_banco.py # Insere dados substitutos, associados no banco
-├── substitutos.py # Geração de produtos substitutos
-└── ultima_atualizacao.txt # Log da última atualização da base
+├── limpeza_estoque.py       # Limpeza da base de estoque
+├── limpeza_notas.py         # Limpeza da base de notas fiscais
+├── main.py                  # Interface principal (Flet)
+├── manual.py                # Componente UI com instruções do sistema
+├── recomendador.py          # Regras de associação e cross-selling
+├── requirements.txt         # Dependências do projeto
+├── salva_banco.py           # Insere dados substitutos, associados no banco
+├── substitutos.py           # Geração de produtos substitutos
+└── ultima_atualizacao.txt   # Log da última atualização da base
+```
+
 ## ⚡ Como Usar
 
 ### 1. Configurar o Banco de Dados
@@ -193,20 +197,20 @@ python main.py
 - `TabelaRecomendacao` → tabela de substitutos.
 - `TabelaAssociados` → tabela de produtos comprados juntos.
 
-## Diagrama visual de fluxo de dados do sistema
-
-## Diagrama visual de fluxo de dados do sistema
-
+## 📊 Diagrama de Fluxo de Dados do Sistema
+```
 main.py (UI Flet)
-    ├─> alimentador_banco2.py (Atualiza base de dados)
-    │       ├─> limpeza_estoque.py
-    │       │       └─> limpeza_notas.py
-    │       │               └─> limpeza_base_mesclada.py
-    │       │                       └─> substitutos.py
-    │       │                               └─> recomendador.py (cross-selling)
-    │       │                                       └─> salva_banco.py
-    │       │                                               └─> consolidar.py
-    │
-    └─> consultas.py (busca produtos e gera tabelas de recomendação)
-            ├─> TabelaRecomendacao
-            └─> TabelaAssociados
+├─> alimentador_banco2.py   (Atualiza base de dados)
+│   └─> limpeza_estoque.py
+│      └─> limpeza_notas.py
+│         └─> limpeza_base_mesclada.py
+│            └─> substitutos.py
+│               └─> recomendador.py   (cross-selling)
+│                  └─> salva_banco.py
+│                     └─> consolidar.py
+│                        └─> consultas.py    (busca produtos e gera tabelas de recomendação)
+├─> TabelaRecomendacao
+└─> TabelaAssociados
+```
+
+
