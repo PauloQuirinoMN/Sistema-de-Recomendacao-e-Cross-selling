@@ -15,7 +15,7 @@ Sistema desenvolvido em Python para fornecer recomendações de produtos em vend
 3. **Atualização Automática da Base**
    - Carrega e limpa automaticamente as bases de estoque e notas fiscais.
    - Gera tabelas consolidadas no banco de dados PostgreSQL.
-   - Permite atualização assíncrona e acompanhamento em tempo real via UI.
+   - Permite atualização assíncrona e acompanhamento via UI.
 
 4. **Interface Interativa**
    - Pesquisa de produtos por código.
@@ -31,7 +31,7 @@ Sistema desenvolvido em Python para fornecer recomendações de produtos em vend
 
 ## 🛠 Tecnologias e Dependências
 
-- **Python 3.11+**
+- **Python 3.13.5 +**
 - **Bibliotecas**:
   - pandas==2.3.0
   - numpy==2.3.2
