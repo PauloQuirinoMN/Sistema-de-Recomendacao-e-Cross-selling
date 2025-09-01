@@ -4,3 +4,10 @@ __pycache__/
 *.pyo
 *.pyd
 *.ipynb_checkpoints
+# Empacotamento
+dist/
+build/
+*.exe
+*.pkg
+*.spec
+*.ico
