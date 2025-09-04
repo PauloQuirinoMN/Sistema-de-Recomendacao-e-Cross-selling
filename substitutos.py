@@ -1,111 +1,94 @@
 import pandas as pd
+import psycopg2
 
-class RecomendadorSubstituto:
+class RecomendadorSubstitutoDB:
     """
-    Classe para recomendação de produtos substitutos.
+    Classe para recomendação de produtos substitutos diretamente do banco de dados.
 
     Funcionalidades:
-        - Recomenda substitutos para um produto específico ou para uma categoria.
-        - Calcula similaridade baseada em preço e margem.
-        - Garante consistência na formatação da saída.
+        - Recebe um código de produto para teste.
+        - Verifica se o produto existe na tabela produtos.
+        - Gera um DataFrame com:
+            - Código do produto
+            - Descrição do produto
+            - Margem %
+            - Estoque
+        - Retorna substitutos ranqueados por similaridade de preço de custo.
     """
 
-    def __init__(self, df: pd.DataFrame):
-        self.df = df.drop_duplicates(subset='Código produto')
-        self.categorias_validas = df['Código da categoria'].unique()
-
-    def recomendar(self, codigo_pesquisado: int, n_recomendacoes: int = 6) -> pd.DataFrame:
+    def __init__(self, conn, codigo_teste: int):
         """
-        Retorna os produtos substitutos para um código pesquisado.
-
-        Se o código for produto, chama a recomendação por produto.
-        Se o código for categoria, chama a recomendação por categoria.
-        Caso contrário, sugere alternativas gerais.
+        :param conn: Conexão psycopg2 com o banco.
+        :param codigo_teste: Código do produto que será usado como referência.
         """
-        if codigo_pesquisado in self.df['Código produto'].values:
-            return self._recomendar_por_produto(codigo_pesquisado, n_recomendacoes)
-        elif codigo_pesquisado in self.categorias_validas:
-            return self._recomendar_por_categoria(codigo_pesquisado, n_recomendacoes)
-        else:
-            print(f"⚠️ Código {codigo_pesquisado} não corresponde a produto ou categoria válida.")
-            return self._formatar_resultado(None, self._recomendar_alternativas(n_recomendacoes))
+        self.conn = conn
+        self.codigo_teste = codigo_teste
+        self.df_produtos = self._carregar_produtos()
+        self.produto_base = self._verificar_produto(codigo_teste)
 
-    # ---------------- Recomendação por produto ----------------
-    def _recomendar_por_produto(self, cod_produto: int, n: int) -> pd.DataFrame:
-        produto_base = self.df[self.df['Código produto'] == cod_produto].iloc[0]
+    # ---------------- Carrega produtos e calcula margem ----------------
+    def _carregar_produtos(self) -> pd.DataFrame:
+        query = """
+        SELECT 
+            p.codigo_produto,
+            p.descricao_produto,
+            p.preco_custo,
+            p.quantidade_estoque,
+            c.codigo_categoria,
+            AVG(i.valor_unitario) AS preco_venda_medio
+        FROM produtos p
+        LEFT JOIN itens_notas i ON i.produto_id = p.id
+        LEFT JOIN categorias c ON c.id = p.categoria_id
+        GROUP BY p.codigo_produto, p.descricao_produto, p.preco_custo, p.quantidade_estoque, c.codigo_categoria
+        """
+        df = pd.read_sql(query, self.conn)
 
-        if produto_base['Quantidade estoque'] > 0:
-            print(f"ℹ️ Produto {cod_produto} em estoque. Mostrando alternativas similares:")
-        else:
-            print(f"⚠️ Produto {cod_produto} sem estoque. Mostrando alternativas:")
+        # Calcula margem
+        df['margem_percent'] = ((df['preco_venda_medio'] - df['preco_custo']) / df['preco_venda_medio']) * 100
+        df['margem_percent'] = (df['margem_percent'].fillna(0)).round(2)
+        df['quantidade_estoque'] = df['quantidade_estoque'].fillna(0).astype(int)
+        return df
 
-        substitutos = self.df[
-            (self.df['Código da categoria'] == produto_base['Código da categoria']) &
-            (self.df['Código produto'] != cod_produto) &
-            (self.df['Quantidade estoque'] > 0)
+    # ---------------- Verifica produto base ----------------
+    def _verificar_produto(self, codigo: int) -> pd.Series | None:
+        """
+        Verifica se o produto existe e retorna suas informações.
+        """
+        produto = self.df_produtos[self.df_produtos['codigo_produto'] == codigo]
+        if produto.empty:
+            print(f"⚠️ Produto {codigo} não encontrado no banco.")
+            return None
+        return produto.iloc[0]
+
+    # ---------------- Gera recomendação ----------------
+    def recomendar_substitutos(self, n: int = 6) -> pd.DataFrame:
+        if self.produto_base is None:
+            return pd.DataFrame(columns=['codigo_produto', 'descricao_produto', 'margem_percent', 'quantidade_estoque'])
+
+        # Tenta filtrar produtos da mesma categoria
+        categoria_base = self.produto_base['codigo_categoria']
+        df_substitutos = self.df_produtos[
+            (self.df_produtos['quantidade_estoque'] > 0) &
+            (self.df_produtos['codigo_produto'] != self.codigo_teste) &
+            (self.df_produtos['codigo_categoria'] == categoria_base)
         ].copy()
 
-        # 🔹 Remove duplicados por código
-        substitutos = substitutos.drop_duplicates(subset='Código produto')
+        # Se não houver produtos na mesma categoria, usar todos disponíveis
+        if df_substitutos.empty:
+            df_substitutos = self.df_produtos[
+                (self.df_produtos['quantidade_estoque'] > 0) &
+                (self.df_produtos['codigo_produto'] != self.codigo_teste)
+            ].copy()
 
-        if not substitutos.empty:
-            # Calcula similaridade ponderando preço e margem
-            substitutos['similaridade'] = (
-                0.7 * (1 - (substitutos['Valor unitário'] - produto_base['Valor unitário']).abs() / produto_base['Valor unitário']) +
-                0.3 * (1 - (substitutos['Margem %'] - produto_base['Margem %']).abs())
-            )
-            return self._formatar_resultado(produto_base, substitutos.nlargest(n, 'similaridade'))
+        # Calcula similaridade baseada em preço de custo
+        df_substitutos['similaridade'] = 1 - (abs(df_substitutos['preco_custo'] - self.produto_base['preco_custo']) / self.produto_base['preco_custo'])
 
-        print("⚠️ Nenhum substituto na mesma categoria.")
-        return self._formatar_resultado(produto_base, self._recomendar_alternativas(n))
+        df_substitutos = df_substitutos.sort_values(
+        by=['similaridade', 'preco_custo'], 
+        ascending=[False, False]
+        )
 
-    # ---------------- Recomendação por categoria ----------------
-    def _recomendar_por_categoria(self, cod_categoria: int, n: int) -> pd.DataFrame:
-        produtos_categoria = self.df[
-            (self.df['Código da categoria'] == cod_categoria) &
-            (self.df['Quantidade estoque'] > 0)
-        ].copy()
 
-        # 🔹 Remove duplicados por código
-        produtos_categoria = produtos_categoria.drop_duplicates(subset='Código produto')
-
-        if not produtos_categoria.empty:
-            categoria_nome = produtos_categoria.iloc[0]['Categoria']
-            print(f"ℹ️ Categoria {categoria_nome} encontrada.")
-            return self._formatar_resultado(
-                produtos_categoria.iloc[0],
-                produtos_categoria.sample(min(n, len(produtos_categoria)))
-            )
-
-        print(f"⚠️ Categoria {cod_categoria} sem produtos em estoque.")
-        return self._formatar_resultado(None, self._recomendar_alternativas(n))
-
-    # ---------------- Alternativas gerais ----------------
-    def _recomendar_alternativas(self, n: int) -> pd.DataFrame:
-        """Seleciona aleatoriamente produtos disponíveis como alternativas gerais"""
-        alternativas = self.df[self.df['Quantidade estoque'] > 0].copy()
-        alternativas = alternativas.drop_duplicates(subset='Código produto')
-        return alternativas.sample(min(n, len(alternativas)))
-
-    # ---------------- Formatação de resultado ----------------
-    def _formatar_resultado(self, produto_base, recomendacoes: pd.DataFrame) -> pd.DataFrame:
-        """
-        Formata o DataFrame de recomendação para exibição ou inserção.
-        - Valores monetários arredondados
-        - Margem percentual em %
-        - Colunas padronizadas
-        - Remove produtos duplicados
-        """
-        if produto_base is not None:
-            print(f"\n🔄 Produto pesquisado: {produto_base['Código produto']} ({produto_base['Descrição do produto']})")
-        else:
-            print("\n📦 Resultado da Recomendação de Substitutos:")
-
-        cols = ['Código produto', 'Descrição do produto', 'Valor unitário', 
-                'Margem %', 'Quantidade estoque', 'Categoria']
-
-        recomendacoes = recomendacoes[cols].drop_duplicates(subset='Código produto').reset_index(drop=True)
-        recomendacoes['Valor unitário'] = recomendacoes['Valor unitário'].round(2)
-        recomendacoes['Margem %'] = (recomendacoes['Margem %'] * 100).round(2)
-
-        return recomendacoes
+        # Seleciona colunas finais e limita o número de recomendações
+        resultado = df_substitutos[['codigo_produto', 'descricao_produto', 'margem_percent', 'quantidade_estoque']].head(n).reset_index(drop=True)
+        return resultado
