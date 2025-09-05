@@ -1,4 +1,5 @@
 import pandas as pd
+from sqlalchemy import create_engine, text
 from psycopg2.extras import execute_values
 
 
@@ -12,33 +13,30 @@ class ConsolidadoNormalizer:
     - itens_notas
     """
 
-    def __init__(self, conn):
-        self.conn = conn
+    def __init__(self, conn_str: str):
+        self.engine = create_engine(conn_str)
 
     # ---------------------------------------------------------
     # CRIAÇÃO DAS TABELAS
     # ---------------------------------------------------------
     def criar_tabelas(self):
         """Cria as tabelas normalizadas se não existirem"""
-        with self.conn.cursor() as cur:
-
-            cur.execute("""
+        ddl_statements = [
+            """
             CREATE TABLE IF NOT EXISTS categorias (
                 id SERIAL PRIMARY KEY,
                 codigo_categoria INTEGER UNIQUE,
                 nome_categoria TEXT
             );
-            """)
-
-            cur.execute("""
+            """,
+            """
             CREATE TABLE IF NOT EXISTS marcas (
                 id SERIAL PRIMARY KEY,
                 codigo_marca INTEGER UNIQUE,
                 nome_marca TEXT
             );
-            """)
-
-            cur.execute("""
+            """,
+            """
             CREATE TABLE IF NOT EXISTS produtos (
                 id SERIAL PRIMARY KEY,
                 codigo_produto INTEGER UNIQUE,
@@ -49,9 +47,8 @@ class ConsolidadoNormalizer:
                 marca_id INTEGER REFERENCES marcas(id),
                 data_insercao TIMESTAMP DEFAULT NOW()
             );
-            """)
-
-            cur.execute("""
+            """,
+            """
             CREATE TABLE IF NOT EXISTS notas_fiscais (
                 id SERIAL PRIMARY KEY,
                 numero_nota_fiscal INTEGER UNIQUE,
@@ -59,9 +56,8 @@ class ConsolidadoNormalizer:
                 valor_nota NUMERIC,
                 data_insercao TIMESTAMP DEFAULT NOW()
             );
-            """)
-
-            cur.execute("""
+            """,
+            """
             CREATE TABLE IF NOT EXISTS itens_notas (
                 id SERIAL PRIMARY KEY,
                 nota_id INTEGER REFERENCES notas_fiscais(id),
@@ -70,60 +66,59 @@ class ConsolidadoNormalizer:
                 valor_unitario NUMERIC,
                 valor_total_produto NUMERIC,
                 data_insercao TIMESTAMP DEFAULT NOW(),
-                UNIQUE (nota_id, produto_id)  -- garante produto único por nota
+                UNIQUE (nota_id, produto_id)
             );
-            """)
+            """
+        ]
 
-            self.conn.commit()
-            print("✅ Tabelas criadas com sucesso!")
+        with self.engine.begin() as conn:
+            for ddl in ddl_statements:
+                conn.execute(text(ddl))
+
+        print("✅ Tabelas criadas com sucesso!")
 
     # ---------------------------------------------------------
     # INSERÇÕES
     # ---------------------------------------------------------
     def inserir_categorias(self, df: pd.DataFrame):
-        """Insere categorias únicas"""
-        df_cat = df[['Código da categoria', 'Categoria']].drop_duplicates().copy()
-        df_cat.rename(columns={
+        df_cat = df[['Código da categoria', 'Categoria']].drop_duplicates()
+        df_cat = df_cat.rename(columns={
             'Código da categoria': 'codigo_categoria',
             'Categoria': 'nome_categoria'
-        }, inplace=True)
+        })
 
-        valores = [tuple(x) for x in df_cat[['codigo_categoria', 'nome_categoria']].to_numpy()]
-
+        valores = [tuple(x) for x in df_cat.to_numpy()]
         query = """
-        INSERT INTO categorias (codigo_categoria, nome_categoria)
-        VALUES %s
-        ON CONFLICT (codigo_categoria) DO NOTHING;
+            INSERT INTO categorias (codigo_categoria, nome_categoria)
+            VALUES %s
+            ON CONFLICT (codigo_categoria) DO NOTHING;
         """
 
-        with self.conn.cursor() as cur:
-            execute_values(cur, query, valores)
-            self.conn.commit()
-            print(f"✅ {len(valores)} categorias inseridas.")
+        with self.engine.begin() as conn:
+            with conn.connection.cursor() as cur:
+                execute_values(cur, query, valores)
+        print(f"✅ {len(valores)} categorias processadas.")
 
     def inserir_marcas(self, df: pd.DataFrame):
-        """Insere marcas únicas"""
-        df_marca = df[['Código da Marca', 'Marca']].drop_duplicates().copy()
-        df_marca.rename(columns={
+        df_marca = df[['Código da Marca', 'Marca']].drop_duplicates()
+        df_marca = df_marca.rename(columns={
             'Código da Marca': 'codigo_marca',
             'Marca': 'nome_marca'
-        }, inplace=True)
+        })
 
-        valores = [tuple(x) for x in df_marca[['codigo_marca', 'nome_marca']].to_numpy()]
-
+        valores = [tuple(x) for x in df_marca.to_numpy()]
         query = """
-        INSERT INTO marcas (codigo_marca, nome_marca)
-        VALUES %s
-        ON CONFLICT (codigo_marca) DO NOTHING;
+            INSERT INTO marcas (codigo_marca, nome_marca)
+            VALUES %s
+            ON CONFLICT (codigo_marca) DO NOTHING;
         """
 
-        with self.conn.cursor() as cur:
-            execute_values(cur, query, valores)
-            self.conn.commit()
-            print(f"✅ {len(valores)} marcas inseridas.")
+        with self.engine.begin() as conn:
+            with conn.connection.cursor() as cur:
+                execute_values(cur, query, valores)
+        print(f"✅ {len(valores)} marcas processadas.")
 
     def inserir_produtos(self, df: pd.DataFrame):
-        """Insere produtos vinculando categorias e marcas"""
         df_prod = df.rename(columns={
             'Produto': 'descricao_produto',
             'Código produto': 'codigo_produto',
@@ -133,25 +128,18 @@ class ConsolidadoNormalizer:
             'Quantidade estoque': 'quantidade_estoque'
         }).copy()
 
-        # Mapear IDs
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT codigo_categoria, id FROM categorias;")
-            categorias = {row[0]: row[1] for row in cur.fetchall()}
-
-            cur.execute("SELECT codigo_marca, id FROM marcas;")
-            marcas = {row[0]: row[1] for row in cur.fetchall()}
+        with self.engine.begin() as conn:
+            categorias = dict(conn.execute(text("SELECT codigo_categoria, id FROM categorias")).fetchall())
+            marcas = dict(conn.execute(text("SELECT codigo_marca, id FROM marcas")).fetchall())
 
         df_prod['categoria_id'] = df_prod['codigo_categoria'].map(categorias)
         df_prod['marca_id'] = df_prod['codigo_marca'].map(marcas)
 
-        # Limpeza
         df_prod = df_prod.dropna(subset=['codigo_produto'])
         df_prod['codigo_produto'] = df_prod['codigo_produto'].astype(int)
         df_prod['descricao_produto'] = df_prod['descricao_produto'].fillna("DESCONHECIDO")
         df_prod['quantidade_estoque'] = df_prod['quantidade_estoque'].fillna(0).astype(int)
         df_prod['preco_custo'] = df_prod['preco_custo'].fillna(0).astype(float)
-        df_prod['categoria_id'] = df_prod['categoria_id'].astype('Int64').where(df_prod['categoria_id'].notnull(), None)
-        df_prod['marca_id'] = df_prod['marca_id'].astype('Int64').where(df_prod['marca_id'].notnull(), None)
 
         valores = [
             (
@@ -166,19 +154,18 @@ class ConsolidadoNormalizer:
         ]
 
         query = """
-        INSERT INTO produtos (codigo_produto, descricao_produto, quantidade_estoque,
-                              preco_custo, categoria_id, marca_id)
-        VALUES %s
-        ON CONFLICT (codigo_produto) DO NOTHING;
+            INSERT INTO produtos (codigo_produto, descricao_produto, quantidade_estoque,
+                                  preco_custo, categoria_id, marca_id)
+            VALUES %s
+            ON CONFLICT (codigo_produto) DO NOTHING;
         """
 
-        with self.conn.cursor() as cur:
-            execute_values(cur, query, valores)
-            self.conn.commit()
-            print(f"✅ {len(valores)} produtos inseridos.")
+        with self.engine.begin() as conn:
+            with conn.connection.cursor() as cur:
+                execute_values(cur, query, valores)
+        print(f"✅ {len(valores)} produtos processados.")
 
     def inserir_notas(self, df: pd.DataFrame):
-        """Insere notas fiscais"""
         df_notas = df.rename(columns={
             'Numero nota fiscal': 'numero_nota_fiscal',
             'Data da venda': 'data_venda',
@@ -186,26 +173,21 @@ class ConsolidadoNormalizer:
         }).copy()
 
         valores = [tuple(x) for x in df_notas[['numero_nota_fiscal', 'data_venda', 'valor_nota']].to_numpy()]
-
         query = """
-        INSERT INTO notas_fiscais (numero_nota_fiscal, data_venda, valor_nota)
-        VALUES %s
-        ON CONFLICT (numero_nota_fiscal) DO NOTHING;
+            INSERT INTO notas_fiscais (numero_nota_fiscal, data_venda, valor_nota)
+            VALUES %s
+            ON CONFLICT (numero_nota_fiscal) DO NOTHING;
         """
 
-        with self.conn.cursor() as cur:
-            execute_values(cur, query, valores)
-            self.conn.commit()
-            print(f"✅ {len(valores)} notas inseridas.")
+        with self.engine.begin() as conn:
+            with conn.connection.cursor() as cur:
+                execute_values(cur, query, valores)
+        print(f"✅ {len(valores)} notas processadas.")
 
     def inserir_itens(self, df: pd.DataFrame):
-        """Insere itens vinculados às notas e produtos"""
-        with self.conn.cursor() as cur:
-            cur.execute("SELECT numero_nota_fiscal, id FROM notas_fiscais;")
-            notas = {row[0]: row[1] for row in cur.fetchall()}
-
-            cur.execute("SELECT codigo_produto, id FROM produtos;")
-            produtos = {row[0]: row[1] for row in cur.fetchall()}
+        with self.engine.begin() as conn:
+            notas = dict(conn.execute(text("SELECT numero_nota_fiscal, id FROM notas_fiscais")).fetchall())
+            produtos = dict(conn.execute(text("SELECT codigo_produto, id FROM produtos")).fetchall())
 
         df_itens = df.rename(columns={
             'Numero nota fiscal': 'numero_nota_fiscal',
@@ -231,16 +213,15 @@ class ConsolidadoNormalizer:
         ]
 
         query = """
-        INSERT INTO itens_notas (nota_id, produto_id, quantidade_produto, valor_unitario, valor_total_produto)
-        VALUES %s
-        ON CONFLICT (nota_id, produto_id) DO NOTHING;
+            INSERT INTO itens_notas (nota_id, produto_id, quantidade_produto, valor_unitario, valor_total_produto)
+            VALUES %s
+            ON CONFLICT (nota_id, produto_id) DO NOTHING;
         """
 
-        with self.conn.cursor() as cur:
-            execute_values(cur, query, valores)
-            inseridos = cur.rowcount  # quantidade de linhas efetivamente inseridas
-            self.conn.commit()
-            print(f"✅ {inseridos} notas inseridas com sucesso!")
+        with self.engine.begin() as conn:
+            with conn.connection.cursor() as cur:
+                execute_values(cur, query, valores)
+        print(f"✅ {len(valores)} itens processados.")
 
     # ---------------------------------------------------------
     # PIPELINE

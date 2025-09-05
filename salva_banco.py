@@ -2,7 +2,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 import pandas as pd
 import numpy as np
-from consolidar import salvar_consolidado
+from consolidar_bases import salvar_consolidado
 
 ''
 def salvar_no_banco(df_substitutos: pd.DataFrame, df_associados: pd.DataFrame, df_modelo: pd.DataFrame, limite: int = 6):

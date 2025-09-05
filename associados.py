@@ -1,99 +1,190 @@
+import gc
+from typing import Optional, Any
+import numpy as np
 import pandas as pd
-import psycopg2
-from mlxtend.frequent_patterns import apriori, association_rules
-from mlxtend.preprocessing import TransactionEncoder
+import scipy.sparse as sp
+
+from mlxtend.frequent_patterns import fpgrowth, association_rules
+
 
 class CrossSellingSimples:
     """
-    Classe para gerar regras de cross-selling para um produto específico.
-    Funciona direto com a base de notas e produtos do banco.
+    Gera regras de cross-selling a partir de um DataFrame de notas.
+    Não salva em banco — retorna um DataFrame com as regras ordenadas por 'lift'.
+
+    Parâmetros do construtor:
+    - df_notas: DataFrame contendo pelo menos as colunas [codigo_nota_col, codigo_prod_col]
+    - df_produtos (opcional): DataFrame com colunas [codigo_prod_col, descricao_col] para enriquecer resultados
+    - codigo_nota_col, codigo_prod_col: nomes das colunas em df_notas
+    - codigo_produtos_col e desc_col: nomes das colunas em df_produtos (se passado)
     """
 
-    def __init__(self, conn):
-        self.conn = conn
+    def __init__(self,
+                 df_notas: pd.DataFrame,
+                 df_produtos: Optional[pd.DataFrame] = None,
+                 codigo_nota_col: str = "numero_nota_fiscal",
+                 codigo_prod_col: str = "codigo_produto",
+                 prod_code_col: str = "codigo_produto",
+                 prod_desc_col: str = "descricao_produto"):
+        self.df_notas = df_notas.copy()
+        self.df_produtos = df_produtos.copy() if df_produtos is not None else None
+        self.codigo_nota_col = codigo_nota_col
+        self.codigo_prod_col = codigo_prod_col
+        self.prod_code_col = prod_code_col
+        self.prod_desc_col = prod_desc_col
 
-    # ---------------- Verifica se o produto existe ----------------
-    def _verificar_produto(self, codigo: int) -> bool:
-        query = "SELECT 1 FROM produtos WHERE codigo_produto = %s LIMIT 1"
-        df = pd.read_sql(query, self.conn, params=(codigo,))
-        return not df.empty
+        # validação rápida
+        if self.codigo_nota_col not in self.df_notas.columns or self.codigo_prod_col not in self.df_notas.columns:
+            raise ValueError(f"df_notas precisa conter as colunas '{self.codigo_nota_col}' e '{self.codigo_prod_col}'")
 
-    # ---------------- Gera regras para um produto ----------------
-    def gerar_regras(self, cod_produto: int, min_support: float = 0.0015,
-                     min_confidence: float = 0.05, min_lift: float = 1.0,
-                     max_len: int = 2, filtro_raros: float = 0.05) -> pd.DataFrame:
+    def _aplicar_min_freq(self, min_freq: Optional[int]) -> pd.DataFrame:
+        """Retorna df_notas filtrado por produtos com freq >= min_freq (se min_freq fornecido)."""
+        if min_freq is None:
+            return self.df_notas
 
-        # 🔹 Verifica se produto existe
-        if not self._verificar_produto(cod_produto):
-            print(f"⚠️ Produto {cod_produto} não encontrado na base.")
-            return pd.DataFrame()
+        freq = self.df_notas[self.codigo_prod_col].value_counts()
+        produtos_validos = freq[freq >= min_freq].index
+        df_filtrado = self.df_notas[self.df_notas[self.codigo_prod_col].isin(produtos_validos)]
+        return df_filtrado
 
-        # 🔹 Carrega notas e produtos
-        df_notas = pd.read_sql(
-            "SELECT nota_id AS numero_nota_fiscal, produto_id AS codigo_produto FROM itens_notas",
-            self.conn
-        )
+    def gerar_regras(self,
+                    min_support: float = 0.0005,
+                    min_confidence: float = 0.05,
+                    min_lift: float = 1.0,
+                    max_len: int = 2,
+                    min_freq: Optional[int] = 50,
+                    min_itemset_count: Optional[int] = None,
+                                        cod_produto: Optional[Any] = None,
+                    top_n: Optional[int] = None) -> pd.DataFrame:
+        """
+        Gera regras e retorna DataFrame com colunas:
+        ['antecedente', 'consequente', 'suporte', 'confianca', 'lift']
+        """
 
-        df_produtos = pd.read_sql(
-            "SELECT codigo_produto, descricao_produto FROM produtos", self.conn
-        )
+        # 1) filtro por frequência mínima
+        df = self._aplicar_min_freq(min_freq)
+        n_transacoes = df[self.codigo_nota_col].nunique()
+        produtos_distintos = df[self.codigo_prod_col].nunique()
+        print(f"[CrossSelling] transações: {n_transacoes} | produtos distintos (após min_freq): {produtos_distintos}")
 
-        # 🔹 Filtra produtos muito raros
-        freq_produtos = df_notas['codigo_produto'].value_counts()
-        limite = freq_produtos.quantile(filtro_raros)  # 5% menos frequentes
-        produtos_validos = freq_produtos[freq_produtos > limite].index
-        df_notas_filtrado = df_notas[df_notas['codigo_produto'].isin(produtos_validos)]
+        if produtos_distintos == 0 or n_transacoes == 0:
+            print("[CrossSelling] após filtro não há dados suficientes.")
+            return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
 
-        # 🔹 Agrupa transações por nota
-        transacoes = df_notas_filtrado.groupby('numero_nota_fiscal')['codigo_produto'].apply(list)
+        # 2) mapeamento produto -> coluna
+        unique_products = df[self.codigo_prod_col].unique()
+        product_to_col = {p: i for i, p in enumerate(unique_products)}
+        columns = list(unique_products)
+        n_products = len(columns)
 
-        # 🔹 One-hot encoding
-        te = TransactionEncoder()
-        te_ary = te.fit_transform(transacoes)
-        df_onehot = pd.DataFrame(te_ary, columns=te.columns_)
+        # 3) matriz esparsa
+        grouped = df.groupby(self.codigo_nota_col)[self.codigo_prod_col].unique()
+        n_rows = len(grouped)
+        rows, cols = [], []
+        for row_idx, prod_list in enumerate(grouped):
+            for p in prod_list:
+                col_idx = product_to_col.get(p)
+                if col_idx is not None:
+                    rows.append(row_idx)
+                    cols.append(col_idx)
+        data = np.ones(len(rows), dtype=np.int8)
 
-        # 🔹 Rodar Apriori
-        frequent_itemsets = apriori(df_onehot, min_support=min_support, use_colnames=True, max_len=max_len)
+        if len(rows) == 0:
+            print("[CrossSelling] nenhuma célula ativa na matriz (após filtro).")
+            return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
+
+        spmatrix = sp.csr_matrix((data, (rows, cols)), shape=(n_rows, n_products))
+
+        # 4) DataFrame one-hot
+        df_onehot = pd.DataFrame.sparse.from_spmatrix(spmatrix, columns=columns)
+        df_onehot = df_onehot.astype(bool)
+
+        del df, grouped, rows, cols, data, spmatrix
+        gc.collect()
+
+        # 5) FP-Growth
+        frequent_itemsets = fpgrowth(df_onehot, min_support=min_support, use_colnames=True, max_len=max_len)
         if frequent_itemsets.empty:
-            print("⚠️ Nenhum itemset frequente encontrado.")
-            return pd.DataFrame()
+            print("[CrossSelling] nenhum itemset frequente encontrado com os parâmetros fornecidos.")
+            del df_onehot
+            gc.collect()
+            return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
 
-        # 🔹 Gerar regras
+        # 6) filtro min_itemset_count
+        if min_itemset_count is not None:
+            frequent_itemsets['itemset_count'] = (frequent_itemsets['support'] * n_rows).round().astype(int)
+            frequent_itemsets = frequent_itemsets[frequent_itemsets['itemset_count'] >= min_itemset_count]
+            frequent_itemsets = frequent_itemsets.drop(columns=['itemset_count'])
+            if frequent_itemsets.empty:
+                print("[CrossSelling] nenhum itemset restante após filtro por min_itemset_count.")
+                del df_onehot
+                gc.collect()
+                return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
+
+        # 7) Regras de associação
         rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)
-        rules = rules[rules["lift"] >= min_lift]
+        if rules.empty:
+            print("[CrossSelling] nenhuma regra gerada a partir dos itemsets.")
+            del df_onehot, frequent_itemsets
+            gc.collect()
+            return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
 
-        # 🔹 Filtra regras para o produto pesquisado
-        regras_produto = rules[
-            rules['antecedents'].apply(lambda x: cod_produto in x) |
-            rules['consequents'].apply(lambda x: cod_produto in x)
-        ]
+        # 8) filtrar por lift
+        rules = rules[rules['lift'] >= min_lift]
+        if rules.empty:
+            print("[CrossSelling] nenhuma regra com lift >= min_lift.")
+            del df_onehot, frequent_itemsets
+            gc.collect()
+            return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
 
-        if regras_produto.empty:
-            print(f"⚠️ Nenhuma regra encontrada para o produto {cod_produto}.")
-            return pd.DataFrame()
+        # 9) filtro por produto específico
+        if cod_produto is not None:
+            nome = None
+            if self.df_produtos is not None:
+                nome = self.df_produtos.loc[
+                    self.df_produtos[self.prod_code_col] == cod_produto, self.prod_desc_col
+                ].squeeze()
+            print(f"[CrossSelling] processando produto {cod_produto} ({nome if nome is not None else 'sem descrição'})...")
 
-        # 🔹 Formata resultado
-        def extrair_codigo(itemset):
-            return next(iter(itemset))
+            rules = rules[
+                rules['antecedents'].apply(lambda s: cod_produto in s) |
+                rules['consequents'].apply(lambda s: cod_produto in s)
+            ]
+            if rules.empty:
+                print(f"[CrossSelling] nenhuma regra encontrada para o produto {cod_produto} ({nome if nome is not None else 'sem descrição'}).")
+                del df_onehot, frequent_itemsets
+                gc.collect()
+                return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
+
+        # 10) formatar resultado
+        def extrair_valor(fset):
+            if len(fset) == 1:
+                return next(iter(fset))
+            else:
+                return tuple(sorted(fset))
 
         resultados = []
-        for _, r in regras_produto.iterrows():
-            ant = extrair_codigo(r['antecedents'])
-            cons = extrair_codigo(r['consequents'])
-            ant_desc = df_produtos.loc[df_produtos['codigo_produto'] == ant, 'descricao_produto'].values[0]
-            cons_desc = df_produtos.loc[df_produtos['codigo_produto'] == cons, 'descricao_produto'].values[0]
-
+        for _, r in rules.iterrows():
             resultados.append({
-                'Antecedente': ant,
-                'Descricao_Antecedente': ant_desc,
-                'Consequente': cons,
-                'Descricao_Consequente': cons_desc,
-                'Suporte': r['support'],
-                'Confiança (%)': r['confidence']*100,
-                'Lift': r['lift']
+                'antecedente': extrair_valor(r['antecedents']),
+                'consequente': extrair_valor(r['consequents']),
+                'suporte': float(r['support']),
+                'confianca': float(r['confidence']),
+                'lift': float(r['lift'])
             })
 
-        # 🔹 Limpar memória
-        del df_notas, df_produtos, df_notas_filtrado, transacoes, df_onehot, frequent_itemsets, rules, regras_produto
+        df_regras = pd.DataFrame(resultados)
 
-        return pd.DataFrame(resultados).sort_values(by='Confiança (%)', ascending=False).reset_index(drop=True)
+        # enriquecer com descrições
+        if self.df_produtos is not None and not df_regras.empty:
+            prod_map = dict(zip(self.df_produtos[self.prod_code_col], self.df_produtos[self.prod_desc_col]))
+            df_regras['descricao_antecedente'] = df_regras['antecedente'].map(prod_map).fillna('')
+            df_regras['descricao_consequente'] = df_regras['consequente'].map(prod_map).fillna('')
+
+        del df_onehot, frequent_itemsets, rules
+        gc.collect()
+
+        if top_n is not None and top_n > 0:
+            return df_regras.nlargest(top_n, 'lift').reset_index(drop=True)
+        else:
+            return df_regras.sort_values(by='lift', ascending=False).reset_index(drop=True)
