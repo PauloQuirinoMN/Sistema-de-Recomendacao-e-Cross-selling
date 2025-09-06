@@ -38,12 +38,12 @@ class AtualizarRegras:
             self,
             cross_obj,
             produtos: List[int],
-            chunk_size: int = 100,
-            per_product_top_n: int = 10,
-            min_support: float = 0.001,
-            min_confidence: float = 0.05,
-            min_lift: float = 1.01,
-            min_freq: Optional[int] = 50,
+            chunk_size: int = 1000,
+            per_product_top_n: int = 5,
+            min_support: float = 0.0001,
+            min_confidence: float = 0.015,
+            min_lift: float = 1.0,
+            min_freq: Optional[int] = 5,
             replace_existing: bool = True
         ):
         """
