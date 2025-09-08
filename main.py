@@ -4,7 +4,9 @@ from sqlalchemy import create_engine
 from typing import Optional
 from substitutos import RecomendadorSubstitutoDB
 from consultas import TabelaRecomendacao, TabelaAssociados
+from atualizar import AtualizacaoComponent
 from manual import ManualSistema
+
 
 # ------------------------
 # Configurações do banco
@@ -16,6 +18,9 @@ DB_CONFIG = dict(
     host="192.168.0.200",
     port="5432"
 )
+
+# sua string de conexão
+conn_str = "postgresql+psycopg2://usuario:senha@localhost:5432/seubanco"
 
 def format_pct(x: float, precision: int = 2) -> str:
     try:
@@ -78,7 +83,8 @@ def main(page: ft.Page):
     resultado_pesquisa = ft.Container()
     recomendacao_ui = ft.Container()
     associados_ui = ManualSistema()
-    atualizar_base = ft.Container()
+    componente_atualizacao = AtualizacaoComponent(conn_str)
+    
 
     # ---------------- FUNÇÕES ----------------
     def limpar_pesquisa(e: Optional[ft.ControlEvent] = None):
@@ -282,6 +288,8 @@ def main(page: ft.Page):
             campo_pesquisar,
             botao_pesquisar,
             botao_limpar,
+            ft.VerticalDivider(width=2, color=ft.Colors.AMBER),
+            componente_atualizacao
         ],
         alignment=ft.MainAxisAlignment.START,
         spacing=10,
@@ -324,6 +332,13 @@ def main(page: ft.Page):
     )
 
     page.add(layout_principal)
+    # registra os pickers invisíveis
+    page.overlay.append(componente_atualizacao.file_picker_estoque)
+    page.overlay.append(componente_atualizacao.file_picker_notas)
+
+    # abre senha na inicialização (opcional)
+    componente_atualizacao.liberar_controles()
+
 
     # garante que a conexão seja fechada ao fechar a janela
     def on_close(e):
