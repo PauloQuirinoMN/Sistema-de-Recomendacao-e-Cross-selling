@@ -43,7 +43,7 @@ class AtualizarRegras:
             min_support: float = 0.0001,
             min_confidence: float = 0.015,
             min_lift: float = 1.0,
-            min_freq: Optional[int] = 5,
+            min_freq: Optional[int] = 2,
             replace_existing: bool = True
         ):
         """

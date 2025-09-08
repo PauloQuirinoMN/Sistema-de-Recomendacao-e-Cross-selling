@@ -48,11 +48,11 @@ class CrossSellingSimples:
         return df_filtrado
 
     def gerar_regras(self,
-                    min_support: float = 0.0005,
-                    min_confidence: float = 0.05,
+                    min_support: float = 0.0001,
+                    min_confidence: float = 0.015,
                     min_lift: float = 1.0,
                     max_len: int = 2,
-                    min_freq: Optional[int] = 50,
+                    min_freq: Optional[int] = 2,
                     min_itemset_count: Optional[int] = None,
                                         cod_produto: Optional[Any] = None,
                     top_n: Optional[int] = None) -> pd.DataFrame:
