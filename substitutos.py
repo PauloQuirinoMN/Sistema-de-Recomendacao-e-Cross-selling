@@ -1,5 +1,4 @@
 import pandas as pd
-import psycopg2
 
 class RecomendadorSubstitutoDB:
     """
@@ -18,10 +17,10 @@ class RecomendadorSubstitutoDB:
 
     def __init__(self, conn, codigo_teste: int):
         """
-        :param conn: Conexão psycopg2 com o banco.
+        :param conn: Conexão SQLAlchemy engine com o banco.
         :param codigo_teste: Código do produto que será usado como referência.
         """
-        self.conn = conn
+        self.conn = conn  # aqui é o engine
         self.codigo_teste = codigo_teste
         self.df_produtos = self._carregar_produtos()
         self.produto_base = self._verificar_produto(codigo_teste)
@@ -41,6 +40,7 @@ class RecomendadorSubstitutoDB:
         LEFT JOIN categorias c ON c.id = p.categoria_id
         GROUP BY p.codigo_produto, p.descricao_produto, p.preco_custo, p.quantidade_estoque, c.codigo_categoria
         """
+        # agora usamos engine (SQLAlchemy)
         df = pd.read_sql(query, self.conn)
 
         # Calcula margem
@@ -81,13 +81,14 @@ class RecomendadorSubstitutoDB:
             ].copy()
 
         # Calcula similaridade baseada em preço de custo
-        df_substitutos['similaridade'] = 1 - (abs(df_substitutos['preco_custo'] - self.produto_base['preco_custo']) / self.produto_base['preco_custo'])
-
-        df_substitutos = df_substitutos.sort_values(
-        by=['similaridade', 'preco_custo'], 
-        ascending=[False, False]
+        df_substitutos['similaridade'] = 1 - (
+            abs(df_substitutos['preco_custo'] - self.produto_base['preco_custo']) / self.produto_base['preco_custo']
         )
 
+        df_substitutos = df_substitutos.sort_values(
+            by=['similaridade', 'preco_custo'],
+            ascending=[False, False]
+        )
 
         # Seleciona colunas finais e limita o número de recomendações
         resultado = df_substitutos[['codigo_produto', 'descricao_produto', 'margem_percent', 'quantidade_estoque']].head(n).reset_index(drop=True)

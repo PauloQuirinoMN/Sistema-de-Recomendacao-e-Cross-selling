@@ -1,6 +1,10 @@
 import flet as ft
 import psycopg2
+from sqlalchemy import create_engine
 from typing import Optional
+from substitutos import RecomendadorSubstitutoDB
+from consultas import TabelaRecomendacao, TabelaAssociados
+from manual import ManualSistema
 
 # ------------------------
 # Configurações do banco
@@ -12,7 +16,6 @@ DB_CONFIG = dict(
     host="192.168.0.200",
     port="5432"
 )
-
 
 def format_pct(x: float, precision: int = 2) -> str:
     try:
@@ -50,12 +53,22 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
 
     # ---------------- CONEXÃO COM BANCO ----------------
+    # ---------------- CONEXÃO COM BANCO ----------------
     try:
+        # conexão tradicional (usada para cursor.execute)
         conn = psycopg2.connect(**DB_CONFIG)
     except Exception as e:
-        page.add(ft.Text(f"Erro ao conectar ao banco: {e}", color=ft.Colors.RED))
+        page.add(ft.Text(f"Erro ao conectar com psycopg2: {e}", color=ft.Colors.RED))
         return
 
+    try:
+        # conexão SQLAlchemy (usada em pandas.read_sql)
+        engine = create_engine(
+            f"postgresql+psycopg2://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}"
+        )
+    except Exception as e:
+        page.add(ft.Text(f"Erro ao criar engine SQLAlchemy: {e}", color=ft.Colors.RED))
+        return
     # ---------------- VARIÁVEIS DE LOG (mantidas, mas vazias) ----------------
     log_text = ft.Text("", size=12)
     barra_progresso = ft.Text("")
@@ -64,12 +77,15 @@ def main(page: ft.Page):
     # ---------------- CONTAINERS DINÂMICOS ----------------
     resultado_pesquisa = ft.Container()
     recomendacao_ui = ft.Container()
+    associados_ui = ManualSistema()
+    atualizar_base = ft.Container()
 
     # ---------------- FUNÇÕES ----------------
     def limpar_pesquisa(e: Optional[ft.ControlEvent] = None):
         campo_pesquisar.value = ""
         resultado_pesquisa.content = None
         recomendacao_ui.content = None
+        associados_ui.content = ManualSistema()
         page.update()
 
     def pesquisar(e: Optional[ft.ControlEvent] = None):
@@ -221,7 +237,20 @@ def main(page: ft.Page):
                 ),
             ]
         )
+
+        # ------------------- SUBSTITUTOS -------------------
+        substitutos = RecomendadorSubstitutoDB(engine, int(campo_pesquisar.value)) 
+        df_subs = substitutos.recomendar_substitutos(n=3)
+
+        tabela_subs = TabelaRecomendacao().criar_tabela(df_subs)
+        recomendacao_ui.content = tabela_subs
         page.update()
+
+        # ------------------- ASSOCIADOS -------------------
+        tabela_associados = TabelaAssociados(engine).criar_tabela(int(campo_pesquisar.value))
+        associados_ui.content = tabela_associados
+        page.update()
+
 
     # ---------------- ELEMENTOS DA INTERFACE ----------------
     titulo = ft.Text(
@@ -263,6 +292,8 @@ def main(page: ft.Page):
             resultado_pesquisa,
             ft.Divider(height=10),
             recomendacao_ui,
+            ft.Divider(height=10),
+            associados_ui
         ],
         alignment=ft.MainAxisAlignment.START,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -278,7 +309,15 @@ def main(page: ft.Page):
     )
 
     layout_principal = ft.Column(
-        [titulo, ft.Divider(height=8), barra_pesquisa, ft.Divider(height=8), conteudo, ft.Divider(), barra_status],
+        [
+            titulo, 
+            ft.Divider(height=8), 
+            barra_pesquisa, 
+            ft.Divider(height=8), 
+            conteudo, 
+            ft.Divider(), 
+            barra_status
+        ],
         expand=True,
         scroll=True,
         spacing=12,
@@ -289,7 +328,7 @@ def main(page: ft.Page):
     # garante que a conexão seja fechada ao fechar a janela
     def on_close(e):
         try:
-            conn.close()
+            engine.close()
         except Exception:
             pass
 
