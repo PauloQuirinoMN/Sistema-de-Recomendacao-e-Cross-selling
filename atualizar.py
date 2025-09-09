@@ -296,7 +296,10 @@ class AtualizacaoComponent(ft.Column):
         self.update()
 
     # ---------------- executar atualização ----------------
+    # ---------------- executar atualização ----------------
     def on_click_atualizar(self, e: Optional[ft.ControlEvent] = None):
+        print("🚀 Entrou no on_click!")
+
         page = self._get_page(e)
         if not self.senha_ok:
             self._toggle_password_row()
@@ -309,10 +312,10 @@ class AtualizacaoComponent(ft.Column):
                 page.update()
             return
 
-        bases_dir = os.path.join(os.getcwd(), "bases")
-        os.makedirs(bases_dir, exist_ok=True)
-        dst_estoque = os.path.join(bases_dir, "relatorio_produtos.xlsx")
-        dst_notas = os.path.join(bases_dir, "relatorio_notas.xlsx")
+        bases = os.path.join(os.getcwd(), "bases")
+        os.makedirs(bases, exist_ok=True)
+        dst_estoque = os.path.join(bases, "relatorio_produtos.xlsx")
+        dst_notas = os.path.join(bases, "relatorio_notas.xlsx")
 
         try:
             shutil.copy2(self.arquivo_estoque, dst_estoque)
@@ -324,53 +327,135 @@ class AtualizacaoComponent(ft.Column):
                 page.update()
             return
 
-        def _worker():
+        # desabilita botão até terminar
+        self.btn_atualizar.disabled = True
+        self.update()
+
+        # executa em thread separada para não travar UI
+        senha = "dev2025"  # 🔑 aqui você pode parametrizar, hoje está fixo
+        threading.Thread(
+            target=self._worker, 
+            args=(senha, dst_estoque, dst_notas),
+            daemon=True
+        ).start()
+
+    def _worker(self, senha: str, dst_estoque: str, dst_notas: str):
+        print("🚀 Entrou no _worker!")
+
+        try:
+            import pandas as pd
+            import traceback
+            from limpeza_estoque import EstoqueCleaner
+            from limpeza_notas import NotasCleaner
+            from associados import CrossSellingSimples
+            from atualizador_regras import AtualizarRegras
+
+            # --- 1) Lendo arquivos
+            print("📂 Lendo arquivos Excel...")
+            if self.page:
+                self.page.snack_bar = ft.SnackBar(ft.Text("📂 Lendo arquivos Excel..."))
+                self.page.snack_bar.open = True
+                self.page.update()
+
+            df_produtos_raw = pd.read_excel(dst_estoque, engine="openpyxl")
+            df_notas_raw = pd.read_excel(dst_notas, engine="openpyxl")
+
+            # --- 2) Limpeza / Normalização
+            print("🧹 Chamando cleaners...")
+            if self.page:
+                self.page.snack_bar = ft.SnackBar(ft.Text("🧹 Limpando e preparando dados..."))
+                self.page.snack_bar.open = True
+                self.page.update()
+
+            # CORREÇÃO AQUI: instanciar sem passar o DataFrame
+            estoque_cleaner = EstoqueCleaner()
+            df_produtos = estoque_cleaner.clean(df_produtos_raw)
+            print("🚀 saiu no estoque!")
+
+            notas_cleaner = NotasCleaner()
+            df_notas = notas_cleaner.clean(df_notas_raw)
+            print("🚀 saiu no notas!")
+
+            # --- utilitário robusto para obter lista de códigos de produto
+            def _extrair_lista_produtos(df):
+                candidatos = [
+                    "codigo_produto", "codigo produto", "codigo", "Código produto",
+                    "Codigo produto", "Codigo", "cod_produto", "cod_prod"
+                ]
+                for c in candidatos:
+                    if c in df.columns:
+                        return list(df[c].dropna().unique())
+                # fallback: pegar todas as colunas numéricas inteiras que parecem códigos
+                for c in df.columns:
+                    if df[c].dtype.kind in ("i", "u") and df[c].nunique() > 0:
+                        return list(df[c].dropna().unique())
+                raise KeyError(f"Nenhuma coluna de código produto encontrada. Colunas: {df.columns.tolist()}")
+
+            # --- 3) Gerar cross-selling
+            print("🔗 Gerando CrossSellingSimples...")
+            if self.page:
+                self.page.snack_bar = ft.SnackBar(ft.Text("🔗 Gerando regras de associação..."))
+                self.page.snack_bar.open = True
+                self.page.update()
+
+            cross_obj = CrossSellingSimples(df_notas=df_notas, df_produtos=df_produtos)
+
+            produtos = _extrair_lista_produtos(df_produtos)
+            print(f"Produtos a processar (exemplo 10): {produtos[:10]} (total {len(produtos)})")
+
+            # --- 4) Atualizar no banco
+            print("💾 Salvando regras no banco...")
+            if self.page:
+                self.page.snack_bar = ft.SnackBar(ft.Text("💾 Salvando regras no banco de dados..."))
+                self.page.snack_bar.open = True
+                self.page.update()
+
+            conn_str = f"postgresql+psycopg2://postgres:{senha}@192.168.0.200:5432/rec"
+            atualizador = AtualizarRegras(conn_str=conn_str)
+
+            atualizador.gerar_e_salvar(
+                cross_obj=cross_obj,
+                produtos=produtos,
+                per_product_top_n=5,
+                min_support=0.0001,
+                min_confidence=0.015,
+                min_lift=1.0,
+                min_freq=2,
+                replace_existing=True
+            )
+
+            # --- 5) Finalização
+            print("✅ Atualização concluída com sucesso!")
+            if self.page:
+                self.page.snack_bar = ft.SnackBar(ft.Text("✅ Atualização concluída com sucesso!"))
+                self.page.snack_bar.open = True
+                self.page.update()
+
+        except Exception as e:
+            print("Erro durante atualização:", e)
+            traceback.print_exc()
+            if self.page:
+                self.page.snack_bar = ft.SnackBar(ft.Text(f"❌ Erro: {str(e)}"))
+                self.page.snack_bar.open = True
+                self.page.update()
+        finally:
+            # sempre reativa o botão correto e atualiza stats
             try:
-                if page:
-                    page.snack_bar = ft.SnackBar(ft.Text("Atualização iniciada..."))
-                    page.snack_bar.open = True
-                    page.update()
-
-                # instancia CrossSellingSimples
-                                
-                df_produtos = pd.read_excel(dst_estoque)  # dst_estoque é o caminho do arquivo de produtos
-                df_notas = pd.read_excel(dst_notas)       # dst_notas é o caminho do arquivo de notas
-
-                cross_obj = CrossSellingSimples(
-                    df_notas=df_notas,
-                    df_produtos=df_produtos
-                )
-
-                # lista de produtos para atualizar (exemplo: todos os produtos do estoque)
-                produtos = cross_obj.get_lista_produtos()  # você precisa implementar esse método na sua classe
-
-                # instancia AtualizarRegras
-                atualizador = AtualizarRegras(conn_str=self.conn_str)
-
-                # chama gerar_e_salvar passando os argumentos necessários
-                atualizador.gerar_e_salvar(
-                    cross_obj=cross_obj,
-                    produtos=produtos
-                )
-
-                if page:
-                    page.snack_bar = ft.SnackBar(ft.Text("Atualização finalizada."))
-                    page.snack_bar.open = True
-            except Exception as ex:
-                print("ERRO NA THREAD:", ex)
-                if page:
-                    page.snack_bar = ft.SnackBar(ft.Text(f"Erro na atualização: {ex}"))
-                    page.snack_bar.open = True
-            finally:
+                self.btn_atualizar.disabled = False
+            except Exception:
                 try:
-                    self.refresh_stats()
+                    self.atualizar_btn.disabled = False  # fallback antigo
                 except Exception:
                     pass
-                if page:
-                    page.update()
+            try:
+                self.update()
+            except Exception:
+                pass
+            try:
+                self.refresh_stats()
+            except Exception:
+                pass
 
-        t = threading.Thread(target=_worker, daemon=True)
-        t.start()
     # ---------------- utilitários ----------------
     def get_selected_files(self):
         return self.arquivo_estoque, self.arquivo_notas
@@ -384,3 +469,5 @@ class AtualizacaoComponent(ft.Column):
         self.btn_upload_estoque.disabled = True
         self.btn_upload_notas.disabled = True
         self._verificar_pronto()
+# DEBUGG
+print("🚀 passou aqui!")
