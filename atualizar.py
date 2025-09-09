@@ -15,9 +15,10 @@ class AtualizacaoComponent(ft.Column):
     para carregar arquivos (.xlsx) de estoque e notas e executar AtualizarRegras.
     """
 
-    def __init__(self, conn_str: str):
+    def __init__(self, conn_str: str, page: ft.Page):
         super().__init__()
         self.conn_str = conn_str
+        self.page = page
         try:
             self.engine = create_engine(conn_str)
         except Exception:
@@ -52,42 +53,46 @@ class AtualizacaoComponent(ft.Column):
         self.file_picker_estoque = ft.FilePicker(on_result=self._on_estoque_result)
         self.file_picker_notas = ft.FilePicker(on_result=self._on_notas_result)
 
+        # Controles
         controls = [
             ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Text("Última atualização", weight=ft.FontWeight.BOLD),
-                        ft.Row([self.txt_ultima], alignment=ft.MainAxisAlignment.CENTER),
-                        ft.Divider(height=6),
+                        ft.Row([ft.Text("Última atualização", weight=ft.FontWeight.BOLD), self.txt_ultima], alignment=ft.MainAxisAlignment.CENTER),
+                        ft.Divider(height=12, color=ft.Colors.BLACK),
                         ft.Row(
                             controls=[
-                                ft.Column([self.txt_produtos, ft.Text("Produtos")], alignment=ft.MainAxisAlignment.CENTER),
-                                ft.Column([self.txt_associados, ft.Text("Produtos associados")], alignment=ft.MainAxisAlignment.CENTER),
-                            ],
-                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        ),
-                        ft.Divider(height=8),
-                        ft.Row(
-                            controls=[
-                                ft.Column([self.btn_upload_estoque, self.label_arquivo_estoque], alignment=ft.MainAxisAlignment.CENTER),
-                                ft.Column([self.btn_upload_notas, self.label_arquivo_notas], alignment=ft.MainAxisAlignment.CENTER),
-                                ft.Column([self.btn_liberar, self.btn_atualizar], alignment=ft.MainAxisAlignment.CENTER)
+                                ft.Column([self.btn_liberar, self.btn_atualizar], alignment=ft.MainAxisAlignment.CENTER, spacing=1),
+                                ft.VerticalDivider(width=6),
+                                ft.Column(
+                                    controls=[
+                                        ft.Row([self.btn_upload_estoque, self.label_arquivo_estoque], alignment=ft.MainAxisAlignment.CENTER),
+                                        ft.Row([self.btn_upload_notas, self.label_arquivo_notas], alignment=ft.MainAxisAlignment.CENTER),   
+                                    ],
+                                    alignment=ft.MainAxisAlignment.SPACE_EVENLY,
+                                    spacing=1,
+                                ),
+                                ft.VerticalDivider(width=6),
+                                ft.Column([self.txt_produtos, ft.Text("Produtos")], alignment=ft.MainAxisAlignment.CENTER, spacing=1),
+                                ft.VerticalDivider(width=6),
+                                ft.Column([self.txt_associados, ft.Text("Associados")], alignment=ft.MainAxisAlignment.CENTER, spacing=1),  
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_EVENLY,
-                            spacing=12,
                         ),
+                        ft.Divider(height=6),    
                     ],
-                    spacing=8,
+                    spacing=0,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
-                padding=ft.padding.symmetric(vertical=12, horizontal=12),
+                padding=10,
                 bgcolor=ft.Colors.WHITE,
                 border=ft.border.all(1, ft.Colors.BLACK12),
                 border_radius=8,
-                width=460
-            )
-        ]
-
+                expand=True,
+                height=120,
+                width=600,
+                )
+            ]
         self.controls = controls
 
         try:
@@ -113,8 +118,8 @@ class AtualizacaoComponent(ft.Column):
             ) AS ultima;
             """
         )
-        cnt_produtos_sql = text("SELECT COUNT(*) FROM produtos;")
-        cnt_associados_sql = text("SELECT COUNT(DISTINCT consequente_id) FROM metricas;")
+        cnt_produtos_sql = text("SELECT COUNT(DISTINCT antecedente_id) FROM metricas;")
+        cnt_associados_sql = text("SELECT COUNT(consequente_id) FROM metricas;")
 
         try:
             with self.engine.connect() as conn:
@@ -139,7 +144,7 @@ class AtualizacaoComponent(ft.Column):
         finally:
             self.update()
 
-    # ---------------- password / unlock ----------------
+# ---------------- password / unlock ----------------
     def liberar_controles(self, e=None):
         """Abre diálogo de senha; se correta (1234) libera uploads."""
         pwd = ft.TextField(password=True, autofocus=True, width=240)
@@ -150,6 +155,7 @@ class AtualizacaoComponent(ft.Column):
                 self.senha_ok = True
                 self.btn_upload_estoque.disabled = False
                 self.btn_upload_notas.disabled = False
+                self._verificar_pronto()  # habilita botão atualizar se arquivos já selecionados
                 dlg.open = False
                 self.page.update()
                 self.update()
@@ -157,26 +163,26 @@ class AtualizacaoComponent(ft.Column):
                 pwd.error_text = "Senha incorreta"
                 self.page.update()
 
+        def cancelar(evt=None):
+            dlg.open = False
+            self.page.update()
+
         dlg = ft.AlertDialog(
             title=ft.Text("Autenticação"),
-            content=ft.Column([ft.Text("Informe a senha para habilitar os controles:"), pwd]),
+            content=ft.Column([
+                ft.Text("Informe a senha para habilitar os controles:"),
+                pwd
+            ]),
             actions=[
-                ft.TextButton("Cancelar", on_click=lambda e: self._close_dialog(e, None)),
-                ft.TextButton("OK", on_click=submit_pwd),
+                ft.TextButton("Cancelar", on_click=cancelar),
+                ft.TextButton("OK", on_click=submit_pwd)
             ],
             modal=True
         )
+
         self.page.dialog = dlg
         dlg.open = True
         self.page.update()
-
-    def _close_dialog(self, e, dlg):
-        try:
-            dlg.open = False
-        except Exception:
-            pass
-        self.page.update()
-
     # ---------------- file pickers ----------------
     def pick_estoque(self, e):
         if not self.senha_ok:

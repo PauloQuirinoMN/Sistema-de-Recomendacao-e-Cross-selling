@@ -20,7 +20,7 @@ DB_CONFIG = dict(
 )
 
 # sua string de conexão
-conn_str = "postgresql+psycopg2://usuario:senha@localhost:5432/seubanco"
+conn_str = "postgresql+psycopg2://postgres:dev2025@192.168.0.200:5432/rec"
 
 def format_pct(x: float, precision: int = 2) -> str:
     try:
@@ -83,7 +83,7 @@ def main(page: ft.Page):
     resultado_pesquisa = ft.Container()
     recomendacao_ui = ft.Container()
     associados_ui = ManualSistema()
-    componente_atualizacao = AtualizacaoComponent(conn_str)
+    componente_atualizacao = AtualizacaoComponent(conn_str, page)
     
 
     # ---------------- FUNÇÕES ----------------
