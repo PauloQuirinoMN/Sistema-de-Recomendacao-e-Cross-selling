@@ -1,11 +1,10 @@
 import gc
-from typing import Optional, Any
+from typing import Optional, Any, List
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 
 from mlxtend.frequent_patterns import fpgrowth, association_rules
-
 
 class CrossSellingSimples:
     """
@@ -16,16 +15,18 @@ class CrossSellingSimples:
     - df_notas: DataFrame contendo pelo menos as colunas [codigo_nota_col, codigo_prod_col]
     - df_produtos (opcional): DataFrame com colunas [codigo_prod_col, descricao_col] para enriquecer resultados
     - codigo_nota_col, codigo_prod_col: nomes das colunas em df_notas
-    - codigo_produtos_col e desc_col: nomes das colunas em df_produtos (se passado)
+    - prod_code_col e prod_desc_col: nomes das colunas em df_produtos (se passado)
     """
 
-    def __init__(self,
-                 df_notas: pd.DataFrame,
-                 df_produtos: Optional[pd.DataFrame] = None,
-                 codigo_nota_col: str = "numero_nota_fiscal",
-                 codigo_prod_col: str = "codigo_produto",
-                 prod_code_col: str = "codigo_produto",
-                 prod_desc_col: str = "descricao_produto"):
+    def __init__(
+        self,
+        df_notas: pd.DataFrame,
+        df_produtos: Optional[pd.DataFrame] = None,
+        codigo_nota_col: str = "numero_nota_fiscal",
+        codigo_prod_col: str = "codigo_produto",
+        prod_code_col: str = "codigo_produto",
+        prod_desc_col: str = "descricao_produto"
+    ):
         self.df_notas = df_notas.copy()
         self.df_produtos = df_produtos.copy() if df_produtos is not None else None
         self.codigo_nota_col = codigo_nota_col
@@ -35,7 +36,9 @@ class CrossSellingSimples:
 
         # validação rápida
         if self.codigo_nota_col not in self.df_notas.columns or self.codigo_prod_col not in self.df_notas.columns:
-            raise ValueError(f"df_notas precisa conter as colunas '{self.codigo_nota_col}' e '{self.codigo_prod_col}'")
+            raise ValueError(
+                f"df_notas precisa conter as colunas '{self.codigo_nota_col}' e '{self.codigo_prod_col}'"
+            )
 
     def _aplicar_min_freq(self, min_freq: Optional[int]) -> pd.DataFrame:
         """Retorna df_notas filtrado por produtos com freq >= min_freq (se min_freq fornecido)."""
@@ -47,15 +50,27 @@ class CrossSellingSimples:
         df_filtrado = self.df_notas[self.df_notas[self.codigo_prod_col].isin(produtos_validos)]
         return df_filtrado
 
-    def gerar_regras(self,
-                    min_support: float = 0.0001,
-                    min_confidence: float = 0.015,
-                    min_lift: float = 1.0,
-                    max_len: int = 2,
-                    min_freq: Optional[int] = 2,
-                    min_itemset_count: Optional[int] = None,
-                                        cod_produto: Optional[Any] = None,
-                    top_n: Optional[int] = None) -> pd.DataFrame:
+    def get_lista_produtos(self) -> List[int]:
+        """
+        Retorna uma lista dos códigos de produtos distintos presentes no DataFrame de produtos.
+        Se df_produtos não estiver disponível, retorna os códigos presentes em df_notas.
+        """
+        if self.df_produtos is not None and self.prod_code_col in self.df_produtos.columns:
+            return list(self.df_produtos[self.prod_code_col].dropna().unique())
+        else:
+            return list(self.df_notas[self.codigo_prod_col].dropna().unique())
+
+    def gerar_regras(
+        self,
+        min_support: float = 0.0001,
+        min_confidence: float = 0.015,
+        min_lift: float = 1.0,
+        max_len: int = 2,
+        min_freq: Optional[int] = 2,
+        min_itemset_count: Optional[int] = None,
+        cod_produto: Optional[Any] = None,
+        top_n: Optional[int] = None
+    ) -> pd.DataFrame:
         """
         Gera regras e retorna DataFrame com colunas:
         ['antecedente', 'consequente', 'suporte', 'confianca', 'lift']

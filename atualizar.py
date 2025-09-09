@@ -1,33 +1,42 @@
 # atualizar.py
 import os
+import pandas as pd
 import shutil
 import threading
 import flet as ft
 from typing import Optional
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
-from atualizador_regras import AtualizarRegras  # sua classe
+from atualizador_regras import AtualizarRegras
+from associados import CrossSellingSimples  # sua classe
 
 
 class AtualizacaoComponent(ft.Column):
     """
-    Componente Flet que mostra última atualização, contadores e controles
-    para carregar arquivos (.xlsx) de estoque e notas e executar AtualizarRegras.
+    Componente para controlar atualização (upload .xlsx + executar AtualizarRegras).
+    Uso:
+        comp = AtualizacaoComponent(conn_str, page)
+        page.add(comp)
     """
 
-    def __init__(self, conn_str: str, page: ft.Page):
+    def __init__(self, conn_str: str, page: Optional[ft.Page] = None):
         super().__init__()
         self.conn_str = conn_str
-        self.page = page
+        self.page: Optional[ft.Page] = page
+
+        # engine SQLAlchemy para consultas de stats
         try:
             self.engine = create_engine(conn_str)
         except Exception:
             self.engine = None
 
+        # estado
         self.arquivo_estoque: Optional[str] = None
         self.arquivo_notas: Optional[str] = None
-        self.senha_ok = False
+        self.senha_ok: bool = False
+        self._filepickers_attached = False
 
+        # labels e elementos UI
         self.txt_ultima = ft.Text("Última atualização: —", size=12)
         self.txt_produtos = ft.Text("0", size=18, weight=ft.FontWeight.BOLD)
         self.txt_associados = ft.Text("0", size=18, weight=ft.FontWeight.BOLD)
@@ -35,53 +44,64 @@ class AtualizacaoComponent(ft.Column):
         self.label_arquivo_estoque = ft.Text("Nenhum arquivo", size=12)
         self.label_arquivo_notas = ft.Text("Nenhum arquivo", size=12)
 
-        self.btn_liberar = ft.TextButton("Liberar", on_click=self.liberar_controles)
+        # botões principais
+        self.btn_liberar = ft.TextButton("Liberar", on_click=lambda e: self._toggle_password_row())
         self.btn_upload_estoque = ft.IconButton(
-            icon=ft.icons.UPLOAD_FILE,
+            icon=ft.Icons.UPLOAD_FILE,  # corrigido
             tooltip="Carregar .xlsx (estoque)",
             disabled=True,
-            on_click=self.pick_estoque
+            on_click=lambda e: self.pick_estoque(e),
         )
         self.btn_upload_notas = ft.IconButton(
-            icon=ft.icons.UPLOAD_FILE,
+            icon=ft.Icons.UPLOAD_FILE,  # corrigido
             tooltip="Carregar .xlsx (notas)",
             disabled=True,
-            on_click=self.pick_notas
+            on_click=lambda e: self.pick_notas(e),
         )
-        self.btn_atualizar = ft.TextButton("Atualizar", disabled=True, on_click=self.on_click_atualizar)
+        self.btn_atualizar = ft.TextButton("Atualizar", disabled=True, on_click=lambda e: self.on_click_atualizar(e))
 
+        # campo de senha inline (inicialmente escondido)
+        self.pwd_field = ft.TextField(password=True, width=260, visible=False, on_submit=lambda ev: self._confirm_password(ev))
+        self.btn_confirm_pwd = ft.TextButton("Confirmar", visible=False, on_click=lambda e: self._confirm_password(e))
+        self.btn_cancel_pwd = ft.TextButton("Cancelar", visible=False, on_click=lambda e: self._cancel_password(e))
+        self.password_row = ft.Row([self.pwd_field, self.btn_confirm_pwd, self.btn_cancel_pwd], spacing=6, visible=False)
+
+        # FilePickers (anexar depois via attach_to_page)
         self.file_picker_estoque = ft.FilePicker(on_result=self._on_estoque_result)
         self.file_picker_notas = ft.FilePicker(on_result=self._on_notas_result)
 
-        # Controles
-        controls = [
+        # monta layout
+        self.controls = [
             ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Row([ft.Text("Última atualização", weight=ft.FontWeight.BOLD), self.txt_ultima], alignment=ft.MainAxisAlignment.CENTER),
-                        ft.Divider(height=12, color=ft.Colors.BLACK),
+                        ft.Row([ft.Text("Última atualização", weight=ft.FontWeight.BOLD), self.txt_ultima],
+                               alignment=ft.MainAxisAlignment.CENTER),
+                        ft.Divider(height=10, color=ft.Colors.BLACK12),
+                        self.password_row,
                         ft.Row(
                             controls=[
-                                ft.Column([self.btn_liberar, self.btn_atualizar], alignment=ft.MainAxisAlignment.CENTER, spacing=1),
+                                ft.Column([self.btn_liberar, self.btn_atualizar],
+                                          alignment=ft.MainAxisAlignment.CENTER, spacing=2),
                                 ft.VerticalDivider(width=6),
                                 ft.Column(
                                     controls=[
                                         ft.Row([self.btn_upload_estoque, self.label_arquivo_estoque], alignment=ft.MainAxisAlignment.CENTER),
-                                        ft.Row([self.btn_upload_notas, self.label_arquivo_notas], alignment=ft.MainAxisAlignment.CENTER),   
+                                        ft.Row([self.btn_upload_notas, self.label_arquivo_notas], alignment=ft.MainAxisAlignment.CENTER),
                                     ],
                                     alignment=ft.MainAxisAlignment.SPACE_EVENLY,
-                                    spacing=1,
+                                    spacing=2,
                                 ),
                                 ft.VerticalDivider(width=6),
                                 ft.Column([self.txt_produtos, ft.Text("Produtos")], alignment=ft.MainAxisAlignment.CENTER, spacing=1),
                                 ft.VerticalDivider(width=6),
-                                ft.Column([self.txt_associados, ft.Text("Associados")], alignment=ft.MainAxisAlignment.CENTER, spacing=1),  
+                                ft.Column([self.txt_associados, ft.Text("Associados")], alignment=ft.MainAxisAlignment.CENTER, spacing=1),
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_EVENLY,
                         ),
-                        ft.Divider(height=6),    
+                        ft.Divider(height=6),
                     ],
-                    spacing=0,
+                    spacing=6,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 padding=10,
@@ -89,19 +109,56 @@ class AtualizacaoComponent(ft.Column):
                 border=ft.border.all(1, ft.Colors.BLACK12),
                 border_radius=8,
                 expand=True,
-                height=120,
+                height=140,
                 width=600,
-                )
-            ]
-        self.controls = controls
+            )
+        ]
 
+        # tenta buscar stats já (se engine ok)
         try:
             self.refresh_stats()
         except Exception:
             pass
 
+        # se page fornecida, anexa filepickers e atualiza UI
+        if self.page is not None:
+            try:
+                self.attach_to_page(self.page)
+            except Exception:
+                pass
+
+    # ---------------- integração com page ----------------
+    def attach_to_page(self, page: ft.Page):
+        """Anexa filepickers ao page.overlay e guarda referência de page."""
+        self.page = page
+        if not self._filepickers_attached:
+            try:
+                if self.file_picker_estoque not in page.overlay:
+                    page.overlay.append(self.file_picker_estoque)
+                if self.file_picker_notas not in page.overlay:
+                    page.overlay.append(self.file_picker_notas)
+                self._filepickers_attached = True
+            except Exception:
+                pass
+        # atualiza indicadores
+        try:
+            self.refresh_stats()
+        finally:
+            self.update()
+
+    def _get_page(self, e: Optional[ft.ControlEvent]) -> Optional[ft.Page]:
+        if e is not None:
+            try:
+                p = getattr(e, "page", None)
+                if p is not None:
+                    return p
+            except Exception:
+                pass
+        return self.page
+
     # ---------------- DB / stats ----------------
     def refresh_stats(self):
+        """Consulta o banco e atualiza indicadores (última, contagens)."""
         if not self.engine:
             self.txt_ultima.value = "Sem engine"
             self.txt_produtos.value = "0"
@@ -144,57 +201,71 @@ class AtualizacaoComponent(ft.Column):
         finally:
             self.update()
 
-# ---------------- password / unlock ----------------
-    def liberar_controles(self, e=None):
-        """Abre diálogo de senha; se correta (1234) libera uploads."""
-        pwd = ft.TextField(password=True, autofocus=True, width=240)
+    # ---------------- password inline ----------------
+    def _toggle_password_row(self):
+        """Mostra/oculta o campo de senha inline."""
+        show = not self.password_row.visible
+        self.password_row.visible = show
+        self.pwd_field.visible = show
+        self.btn_confirm_pwd.visible = show
+        self.btn_cancel_pwd.visible = show
+        if show:
+            # limpa campo
+            self.pwd_field.value = ""
+            self.pwd_field.error_text = None
+        self.update()
 
-        def submit_pwd(evt=None):
-            val = (pwd.value or "").strip()
-            if val == "1234":
-                self.senha_ok = True
-                self.btn_upload_estoque.disabled = False
-                self.btn_upload_notas.disabled = False
-                self._verificar_pronto()  # habilita botão atualizar se arquivos já selecionados
-                dlg.open = False
-                self.page.update()
-                self.update()
-            else:
-                pwd.error_text = "Senha incorreta"
-                self.page.update()
+    def _confirm_password(self, e=None):
+        val = (self.pwd_field.value or "").strip()
+        if val == "1234":
+            self.senha_ok = True
+            self.btn_upload_estoque.disabled = False
+            self.btn_upload_notas.disabled = False
+            # esconde a senha
+            self.password_row.visible = False
+            self.pwd_field.visible = False
+            self.btn_confirm_pwd.visible = False
+            self.btn_cancel_pwd.visible = False
+            self._verificar_pronto()
+        else:
+            self.pwd_field.error_text = "Senha incorreta"
+        self.update()
 
-        def cancelar(evt=None):
-            dlg.open = False
-            self.page.update()
+    def _cancel_password(self, e=None):
+        self.password_row.visible = False
+        self.pwd_field.visible = False
+        self.btn_confirm_pwd.visible = False
+        self.btn_cancel_pwd.visible = False
+        self.pwd_field.value = ""
+        self.pwd_field.error_text = None
+        self.update()
 
-        dlg = ft.AlertDialog(
-            title=ft.Text("Autenticação"),
-            content=ft.Column([
-                ft.Text("Informe a senha para habilitar os controles:"),
-                pwd
-            ]),
-            actions=[
-                ft.TextButton("Cancelar", on_click=cancelar),
-                ft.TextButton("OK", on_click=submit_pwd)
-            ],
-            modal=True
-        )
-
-        self.page.dialog = dlg
-        dlg.open = True
-        self.page.update()
     # ---------------- file pickers ----------------
-    def pick_estoque(self, e):
+    def pick_estoque(self, e: Optional[ft.ControlEvent] = None):
+        page = self._get_page(e)
         if not self.senha_ok:
-            self.liberar_controles()
+            self._toggle_password_row()
             return
-        self.file_picker_estoque.pick_files(allow_multiple=False)
+        if page and not self._filepickers_attached:
+            self.attach_to_page(page)
+        try:
+            self.file_picker_estoque.pick_files(allow_multiple=False)
+        except Exception:
+            if page:
+                page.pick_files(allow_multiple=False, on_result=self._on_estoque_result)
 
-    def pick_notas(self, e):
+    def pick_notas(self, e: Optional[ft.ControlEvent] = None):
+        page = self._get_page(e)
         if not self.senha_ok:
-            self.liberar_controles()
+            self._toggle_password_row()
             return
-        self.file_picker_notas.pick_files(allow_multiple=False)
+        if page and not self._filepickers_attached:
+            self.attach_to_page(page)
+        try:
+            self.file_picker_notas.pick_files(allow_multiple=False)
+        except Exception:
+            if page:
+                page.pick_files(allow_multiple=False, on_result=self._on_notas_result)
 
     def _on_estoque_result(self, ev: ft.FilePickerResultEvent):
         if ev.files and len(ev.files) > 0:
@@ -205,8 +276,8 @@ class AtualizacaoComponent(ft.Column):
         else:
             self.arquivo_estoque = None
             self.label_arquivo_estoque.value = "Nenhum arquivo"
-        self.update()
         self._verificar_pronto()
+        self.update()
 
     def _on_notas_result(self, ev: ft.FilePickerResultEvent):
         if ev.files and len(ev.files) > 0:
@@ -217,26 +288,25 @@ class AtualizacaoComponent(ft.Column):
         else:
             self.arquivo_notas = None
             self.label_arquivo_notas.value = "Nenhum arquivo"
-        self.update()
         self._verificar_pronto()
+        self.update()
 
     def _verificar_pronto(self):
-        if self.senha_ok and self.arquivo_estoque and self.arquivo_notas:
-            self.btn_atualizar.disabled = False
-        else:
-            self.btn_atualizar.disabled = True
+        self.btn_atualizar.disabled = not (self.senha_ok and self.arquivo_estoque and self.arquivo_notas)
         self.update()
 
     # ---------------- executar atualização ----------------
-    def on_click_atualizar(self, e):
+    def on_click_atualizar(self, e: Optional[ft.ControlEvent] = None):
+        page = self._get_page(e)
         if not self.senha_ok:
-            self.liberar_controles()
+            self._toggle_password_row()
             return
 
         if not (self.arquivo_estoque and self.arquivo_notas):
-            self.page.snack_bar = ft.SnackBar(ft.Text("Selecione estoque e notas antes de atualizar."))
-            self.page.snack_bar.open = True
-            self.page.update()
+            if page:
+                page.snack_bar = ft.SnackBar(ft.Text("Selecione estoque e notas antes de atualizar."))
+                page.snack_bar.open = True
+                page.update()
             return
 
         bases_dir = os.path.join(os.getcwd(), "bases")
@@ -248,40 +318,69 @@ class AtualizacaoComponent(ft.Column):
             shutil.copy2(self.arquivo_estoque, dst_estoque)
             shutil.copy2(self.arquivo_notas, dst_notas)
         except Exception as ex:
-            self.page.snack_bar = ft.SnackBar(ft.Text(f"Erro ao copiar arquivos: {ex}"))
-            self.page.snack_bar.open = True
-            self.page.update()
+            if page:
+                page.snack_bar = ft.SnackBar(ft.Text(f"Erro ao copiar arquivos: {ex}"))
+                page.snack_bar.open = True
+                page.update()
             return
 
         def _worker():
             try:
-                self.page.snack_bar = ft.SnackBar(ft.Text("Atualização iniciada..."))
-                self.page.snack_bar.open = True
-                self.page.update()
+                if page:
+                    page.snack_bar = ft.SnackBar(ft.Text("Atualização iniciada..."))
+                    page.snack_bar.open = True
+                    page.update()
 
+                # instancia CrossSellingSimples
+                                
+                df_produtos = pd.read_excel(dst_estoque)  # dst_estoque é o caminho do arquivo de produtos
+                df_notas = pd.read_excel(dst_notas)       # dst_notas é o caminho do arquivo de notas
+
+                cross_obj = CrossSellingSimples(
+                    df_notas=df_notas,
+                    df_produtos=df_produtos
+                )
+
+                # lista de produtos para atualizar (exemplo: todos os produtos do estoque)
+                produtos = cross_obj.get_lista_produtos()  # você precisa implementar esse método na sua classe
+
+                # instancia AtualizarRegras
                 atualizador = AtualizarRegras(conn_str=self.conn_str)
-                try:
-                    atualizador.gerar_e_salvar()
-                except TypeError:
-                    try:
-                        atualizador.gerar_e_salvar(self)
-                    except Exception:
-                        pass
 
-                self.page.snack_bar = ft.SnackBar(ft.Text("Atualização finalizada."))
-                self.page.snack_bar.open = True
+                # chama gerar_e_salvar passando os argumentos necessários
+                atualizador.gerar_e_salvar(
+                    cross_obj=cross_obj,
+                    produtos=produtos
+                )
+
+                if page:
+                    page.snack_bar = ft.SnackBar(ft.Text("Atualização finalizada."))
+                    page.snack_bar.open = True
             except Exception as ex:
-                self.page.snack_bar = ft.SnackBar(ft.Text(f"Erro na atualização: {ex}"))
-                self.page.snack_bar.open = True
+                print("ERRO NA THREAD:", ex)
+                if page:
+                    page.snack_bar = ft.SnackBar(ft.Text(f"Erro na atualização: {ex}"))
+                    page.snack_bar.open = True
             finally:
                 try:
                     self.refresh_stats()
                 except Exception:
                     pass
-                self.page.update()
+                if page:
+                    page.update()
 
         t = threading.Thread(target=_worker, daemon=True)
         t.start()
-
+    # ---------------- utilitários ----------------
     def get_selected_files(self):
         return self.arquivo_estoque, self.arquivo_notas
+
+    def liberar_controles(self):
+        """
+        Método adicionado para permitir a chamada externa sem gerar AttributeError.
+        Habilita uploads e verifica botão de atualização.
+        """
+        self.senha_ok = True
+        self.btn_upload_estoque.disabled = True
+        self.btn_upload_notas.disabled = True
+        self._verificar_pronto()

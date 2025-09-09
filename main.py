@@ -253,7 +253,19 @@ def main(page: ft.Page):
         page.update()
 
         # ------------------- ASSOCIADOS -------------------
-        tabela_associados = TabelaAssociados(engine).criar_tabela(int(campo_pesquisar.value))
+        valor_pesquisa = campo_pesquisar.value.strip()
+        if not valor_pesquisa:
+            # Exiba uma mensagem de erro ou apenas retorne
+            print("Campo de pesquisa vazio.")
+            return
+
+        try:
+            codigo = int(valor_pesquisa)
+        except ValueError:
+            print("Digite um código válido.")
+            return
+
+        tabela_associados = TabelaAssociados(engine).criar_tabela(codigo)
         associados_ui.content = tabela_associados
         page.update()
 
