@@ -77,7 +77,7 @@ class EstoqueCleaner:
         # candidates -> variantes slugificadas possíveis
         self.candidates = {
             "codigo_produto": ["codigo_produto", "codigo", "cod_produto", "cod_prod"],
-            "produto": ["produto", "descricao", "nome_produto"],
+            "descricao_produto": ["produto", "descricao", "nome_produto"],
             "codigo_categoria": ["codigo_da_categoria", "codigo_categoria", "categoria_codigo", "cod_categoria"],
             "categoria": ["categoria", "nome_categoria"],
             "codigo_marca": ["codigo_da_marca", "codigo_marca", "marca_codigo", "cod_marca"],
@@ -86,7 +86,7 @@ class EstoqueCleaner:
             "quantidade_estoque": ["quantidade_estoque", "quantidade", "qtd", "qtd_estoque"]
         }
         # colunas que vamos garantir no final (mínimo)
-        self.required = ["codigo_produto", "produto", "preco_custo", "quantidade_estoque"]
+        self.required = ["codigo_produto", "descricao_produto", "preco_custo", "quantidade_estoque"]
     # DEBUGG
     print("🚀 Entrou no estoque!")
 

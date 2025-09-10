@@ -83,7 +83,7 @@ class NotasCleaner:
 
         # conversões numéricas
         df["quantidade_produto"] = pd.to_numeric(df.reindex(columns=["quantidade_produto"])["quantidade_produto"], errors="coerce").fillna(0)
-        df["valor_unitario"] = pd.to_numeric(df.get("valor_unitario", 0), errors="coerce").fillna(0.0)
+        df["valor_unitario"] = pd.to_numeric(df.reindex(columns=["valor_unitario"])["valor_unitario"], errors="coerce").fillna(0)
         df["preco_custo"] = pd.to_numeric(df.get("preco_custo", 0), errors="coerce").fillna(0.0)
 
         # remover notas com quantidade <= 0 ou valor_unitario == 0
