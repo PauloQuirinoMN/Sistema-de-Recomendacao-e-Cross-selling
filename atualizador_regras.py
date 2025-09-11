@@ -60,7 +60,7 @@ class AtualizarRegras:
             min_lift=min_lift,
             max_len=2,
             min_freq=min_freq,
-            cod_produto=None,   # gera para toda a base
+            cod_produto=None,
             top_n=None
         )
 
@@ -76,6 +76,11 @@ class AtualizarRegras:
         full_rules['antecedente'] = full_rules['antecedente'].astype(int)
         full_rules['consequente'] = full_rules['consequente'].astype(int)
 
+        # 🔎 só manter os produtos que de fato aparecem como antecedente
+        produtos_com_regras = set(full_rules['antecedente'].unique())
+
+        print(f"[AtualizarRegras] Regras geradas para {len(produtos_com_regras)} produtos distintos.")
+
         now = datetime.now()
 
         # iterar em chunks de produtos (aqueles que você quer atualizar)
@@ -88,11 +93,13 @@ class AtualizarRegras:
 
             # para cada produto do chunk, pegar top per_product_top_n regras onde ele é antecedente
             for prod in chunk:
+                if prod not in produtos_com_regras:
+                    # produto nunca aparece como antecedente → skip sem filtro pesado
+                    continue
+
                 subset = full_rules[full_rules['antecedente'] == prod]
                 if subset.empty:
-                    # opcional: também tentar regras onde produto aparece como consequente
-                    # subset = full_rules[full_rules['consequente'] == prod]
-                    print(f"[CrossSelling] nenhuma regra (antecedente) para o produto {prod}.")
+                    # não precisa logar sempre → já sabemos que pode não ter
                     continue
 
                 top = subset.nlargest(per_product_top_n, 'lift')

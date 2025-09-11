@@ -1,21 +1,45 @@
+"""
+UI helpers para exibição de recomendações e associados usando Flet.
+
+Mantive a lógica e assinaturas originais; organizei e documentei blocos
+(declarações, consultas, merges, formatação e renderização).
+"""
+
 import pandas as pd
-from sqlalchemy import create_engine, text 
-from sqlalchemy.exc import SQLAlchemyError   
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 import flet as ft
 
 
-# CLASSE PARA TABELA DE RECOMENDAÇÃO
 class TabelaRecomendacao:
+    """
+    Gera um componente Flet (Container) contendo uma DataTable com
+    produtos substitutos (código, descrição, margem %, estoque).
+
+    Método principal:
+        - criar_tabela(df: pd.DataFrame) -> ft.Control
+    """
+
     def __init__(self):
+        # Classe sem estado além do método de renderização.
         pass
 
     def criar_tabela(self, df: pd.DataFrame):
+        """
+        Recebe um DataFrame esperado com colunas:
+            ['codigo_produto', 'descricao_produto', 'margem_percent', 'quantidade_estoque']
+
+        Retorna:
+            - ft.Text(...) se df vazio
+            - ft.Container(...) com DataTable caso contrário
+        """
         if df.empty:
             return ft.Text("Nenhum produto recomendado encontrado.", color=ft.Colors.RED)
 
-        # 🔹 Remove duplicados para evitar repetição
-        df = df.drop_duplicates(subset='codigo_produto').reset_index(drop=True)
+        # Remove duplicados por codigo_produto e reindexa
+        df = df.drop_duplicates(subset="codigo_produto").reset_index(drop=True)
 
+        # Construção das linhas da DataTable
         rows = []
         for _, row in df.iterrows():
             rows.append(
@@ -26,18 +50,22 @@ class TabelaRecomendacao:
                         ft.DataCell(ft.Text(f"{row['margem_percent']:.1f}%")),
                         ft.DataCell(ft.Text(str(row["quantidade_estoque"]))),
                     ],
-                    on_select_changed=lambda e, cod=row["codigo_produto"]: 
-                        print(f"Produto substituto selecionado: {cod}")
+                    # captura segura do código com default arg para evitar problema de late-binding
+                    on_select_changed=lambda e, cod=row["codigo_produto"]:
+                        print(f"Produto substituto selecionado: {cod}"),
                 )
             )
 
+        # Retorna o container com título e a DataTable estilizada
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text("POSSÍVEIS PRODUTOS SUBSTITUTOS", 
-                            size=16, 
-                            weight=ft.FontWeight.BOLD,
-                            color=ft.Colors.BLUE_800),
+                    ft.Text(
+                        "POSSÍVEIS PRODUTOS SUBSTITUTOS",
+                        size=16,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.BLUE_800,
+                    ),
                     ft.Divider(height=1, color=ft.Colors.BLUE_GREY_300),
                     ft.DataTable(
                         columns=[
@@ -55,27 +83,44 @@ class TabelaRecomendacao:
                         heading_row_height=40,
                         data_row_color={"hovered": ft.Colors.BLUE_GREY_100},
                         show_checkbox_column=False,
-                        expand=True
+                        expand=True,
                     ),
                 ],
-                spacing=10
+                spacing=10,
             ),
             padding=ft.padding.symmetric(vertical=10, horizontal=15),
             margin=ft.margin.only(bottom=15),
         )
 
 
-# ------------------- CLASSE PARA TABELA DE ASSOCIADOS -------------------
 class TabelaAssociados:
+    """
+    Consulta a tabela `metricas` (antecedente -> consequente) e monta
+    um DataFrame enriquecido com descrição, estoque, preço de custo e
+    preço de venda médio. Fornece também o método para renderizar a
+    tabela em Flet (criar_tabela).
+    """
+
     def __init__(self, engine):
+        """
+        :param engine: SQLAlchemy engine (ou compatível) para executar queries.
+        """
         self.engine = engine
 
-    def buscar_associados(self, codigo: str):
+    def buscar_associados(self, codigo: str) -> pd.DataFrame:
+        """
+        Retorna um DataFrame com produtos associados (até 5) ao `codigo` informado.
+        Colunas resultantes incluem: produto_associado_cod, frequencia (suporte),
+        conversao (confianca), codigo_produto, descricao_produto, preco_custo,
+        quantidade_estoque, produto_id, preco_venda_medio, margem_percent, conversao_percent.
+        """
+        # valida entrada
         if not codigo or not str(codigo).strip():
             return pd.DataFrame()
 
-        # Consulta principal: produtos associados
-        query = text("""
+        # Consulta principal: pega consequentes (produtos associados)
+        query = text(
+            """
             SELECT 
                 m.consequente_id AS produto_associado_cod,
                 m.suporte AS frequencia,
@@ -84,7 +129,8 @@ class TabelaAssociados:
             WHERE m.antecedente_id = :codigo
             ORDER BY m.consequente_id, m.suporte DESC
             LIMIT 5;
-        """)
+            """
+        )
 
         try:
             df_assoc = pd.read_sql_query(query, self.engine, params={"codigo": str(codigo)})
@@ -95,10 +141,11 @@ class TabelaAssociados:
         if df_assoc.empty:
             return df_assoc
 
-        # Busca informações adicionais dos produtos (descrição, estoque, preco_custo)
-        codigos = df_assoc['produto_associado_cod'].tolist()
+        # Lista de códigos encontrados (usada para consultas seguintes)
+        codigos = df_assoc["produto_associado_cod"].tolist()
         codigos_str = ",".join(str(c) for c in codigos)
 
+        # Busca dados dos produtos (descrição, custo, estoque)
         query_prod = f"""
             SELECT 
                 codigo_produto,
@@ -108,14 +155,13 @@ class TabelaAssociados:
             FROM produtos
             WHERE codigo_produto IN ({codigos_str})
         """
-
         try:
             df_prod = pd.read_sql_query(query_prod, self.engine)
         except SQLAlchemyError as e:
             print("Erro ao consultar produtos:", e)
             return pd.DataFrame()
 
-        # Calcula preço médio de venda a partir da tabela itens_notas
+        # Calcula preço médio de venda por produto a partir de itens_notas
         query_avg = f"""
             SELECT 
                 produto_id,
@@ -128,45 +174,58 @@ class TabelaAssociados:
             df_avg = pd.read_sql_query(query_avg, self.engine)
         except SQLAlchemyError as e:
             print("Erro ao consultar preço médio:", e)
-            df_avg = pd.DataFrame(columns=['produto_id', 'preco_venda_medio'])
+            # mantém df_avg com colunas esperadas para merges posteriores
+            df_avg = pd.DataFrame(columns=["produto_id", "preco_venda_medio"])
 
-        # Converte para numérico
-        df_prod['preco_custo'] = pd.to_numeric(df_prod['preco_custo'], errors='coerce')
-        df_assoc['conversao'] = pd.to_numeric(df_assoc['conversao'], errors='coerce')
-        df_avg['preco_venda_medio'] = pd.to_numeric(df_avg['preco_venda_medio'], errors='coerce')
+        # Conversões numéricas seguras
+        df_prod["preco_custo"] = pd.to_numeric(df_prod.get("preco_custo", pd.Series()), errors="coerce")
+        df_assoc["conversao"] = pd.to_numeric(df_assoc.get("conversao", pd.Series()), errors="coerce")
+        df_avg["preco_venda_medio"] = pd.to_numeric(df_avg.get("preco_venda_medio", pd.Series()), errors="coerce")
 
-        # Junta informações associadas
-        df = df_assoc.merge(df_prod, left_on='produto_associado_cod', right_on='codigo_produto', how='left')
-        df = df.merge(df_avg, left_on='produto_associado_cod', right_on='produto_id', how='left')
+        # Merge das informações: assoc <- produtos <- avg(preco venda)
+        df = df_assoc.merge(
+            df_prod,
+            left_on="produto_associado_cod",
+            right_on="codigo_produto",
+            how="left",
+        )
+        df = df.merge(df_avg, left_on="produto_associado_cod", right_on="produto_id", how="left")
 
-        # Calcula margem corretamente
-        df['margem_percent'] = ((df['preco_venda_medio'] - df['preco_custo']) / df['preco_venda_medio'] * 100)
-        df['margem_percent'] = df['margem_percent'].fillna(0).round(2)
+        # Cálculo da margem percentual (proteção básica via fillna depois)
+        df["margem_percent"] = ((df["preco_venda_medio"] - df["preco_custo"]) / df["preco_venda_medio"] * 100)
+        df["margem_percent"] = df["margem_percent"].fillna(0).round(2)
 
-        # Corrige estoque e conversão
-        df['quantidade_estoque'] = pd.to_numeric(df['quantidade_estoque'], errors='coerce').fillna(0).astype(int)
-        df['conversao_percent'] = (df['conversao'] * 100).round(2)
+        # Normaliza estoque e conversão
+        df["quantidade_estoque"] = pd.to_numeric(df.get("quantidade_estoque", pd.Series()), errors="coerce").fillna(0).astype(int)
+        df["conversao_percent"] = (df["conversao"] * 100).round(2)
 
         return df
 
     def criar_tabela(self, codigo: str):
+        """
+        Monta e retorna um componente Flet (Container) com a tabela de
+        produtos associados ao `codigo` informado. Se não houver resultados,
+        retorna um Container com mensagem informativa.
+        """
         df = self.buscar_associados(codigo)
         if df.empty:
             return ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Text(f"Nenhum produto associado encontrado para o código {codigo}.",
-                                color=ft.Colors.RED)
+                        ft.Text(
+                            f"Nenhum produto associado encontrado para o código {codigo}.",
+                            color=ft.Colors.RED,
+                        )
                     ]
                 ),
                 padding=ft.padding.symmetric(vertical=10, horizontal=15),
                 margin=ft.margin.only(bottom=15),
             )
 
-        # Remove duplicados por segurança
-        df = df.drop_duplicates(subset='produto_associado_cod').reset_index(drop=True)
+        # Remove duplicados por segurança e reindexa
+        df = df.drop_duplicates(subset="produto_associado_cod").reset_index(drop=True)
 
-        # Monta linhas da tabela
+        # Monta linhas da DataTable
         rows = []
         for _, row in df.iterrows():
             rows.append(
@@ -179,18 +238,20 @@ class TabelaAssociados:
                         ft.DataCell(ft.Text(f'{row["conversao_percent"]:.2f}%')),
                     ],
                     on_select_changed=lambda e, cod=row["produto_associado_cod"]:
-                        print(f"Produto associado selecionado: {cod}")
+                        print(f"Produto associado selecionado: {cod}"),
                 )
             )
 
-        # Cria DataTable
+        # Retorna container com DataTable estilizada
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text("PRODUTOS QUE NORMALMENTE SÃO COMPRADOS JUNTOS",
-                            size=16,
-                            weight=ft.FontWeight.BOLD,
-                            color=ft.Colors.BLUE_800),
+                    ft.Text(
+                        "PRODUTOS QUE NORMALMENTE SÃO COMPRADOS JUNTOS",
+                        size=16,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.BLUE_800,
+                    ),
                     ft.Divider(height=1, color=ft.Colors.BLUE_GREY_300),
                     ft.DataTable(
                         columns=[
@@ -209,10 +270,10 @@ class TabelaAssociados:
                         heading_row_height=40,
                         data_row_color={"hovered": ft.Colors.BLUE_GREY_100},
                         show_checkbox_column=False,
-                        expand=True
+                        expand=True,
                     ),
                 ],
-                spacing=10
+                spacing=10,
             ),
             padding=ft.padding.symmetric(vertical=10, horizontal=15),
             margin=ft.margin.only(bottom=15),

@@ -2,25 +2,33 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from psycopg2.extras import execute_values
 
-
 class ConsolidadoNormalizer:
     """
-    Classe responsável por normalizar os dados e inserir nas tabelas:
+    Classe responsável por normalizar dados e popular as tabelas do banco:
+
+    Tabelas:
     - categorias
     - marcas
     - produtos
     - notas_fiscais
     - itens_notas
+
+    Funcionalidades:
+    - Criação de tabelas se não existirem.
+    - Inserção de dados de estoque e notas de forma consistente.
+    - Mapeamento automático de categorias e marcas pelos códigos.
+    - Garantia de integridade das relações (FKs).
     """
 
     def __init__(self, conn_str: str):
         self.engine = create_engine(conn_str)
+        print("🚀 ConsolidadoNormalizer inicializado.")
 
     # ---------------------------------------------------------
     # CRIAÇÃO DAS TABELAS
     # ---------------------------------------------------------
     def criar_tabelas(self):
-        """Cria as tabelas normalizadas se não existirem"""
+        """Cria todas as tabelas normalizadas se não existirem"""
         ddl_statements = [
             """
             CREATE TABLE IF NOT EXISTS categorias (
@@ -74,18 +82,15 @@ class ConsolidadoNormalizer:
         with self.engine.begin() as conn:
             for ddl in ddl_statements:
                 conn.execute(text(ddl))
-
         print("✅ Tabelas criadas com sucesso!")
 
     # ---------------------------------------------------------
     # INSERÇÕES
     # ---------------------------------------------------------
     def inserir_categorias(self, df: pd.DataFrame):
-        df_cat = df[['Código da categoria', 'Categoria']].drop_duplicates()
-        df_cat = df_cat.rename(columns={
-            'Código da categoria': 'codigo_categoria',
-            'Categoria': 'nome_categoria'
-        })
+        """Insere categorias únicas no banco"""
+        df_cat = df[['codigo_categoria', 'categoria']].drop_duplicates()
+        df_cat = df_cat.rename(columns={'categoria': 'nome_categoria'})
 
         valores = [tuple(x) for x in df_cat.to_numpy()]
         query = """
@@ -93,18 +98,15 @@ class ConsolidadoNormalizer:
             VALUES %s
             ON CONFLICT (codigo_categoria) DO NOTHING;
         """
-
         with self.engine.begin() as conn:
             with conn.connection.cursor() as cur:
                 execute_values(cur, query, valores)
         print(f"✅ {len(valores)} categorias processadas.")
 
     def inserir_marcas(self, df: pd.DataFrame):
-        df_marca = df[['Código da Marca', 'Marca']].drop_duplicates()
-        df_marca = df_marca.rename(columns={
-            'Código da Marca': 'codigo_marca',
-            'Marca': 'nome_marca'
-        })
+        """Insere marcas únicas no banco"""
+        df_marca = df[['codigo_marca', 'marca']].drop_duplicates()
+        df_marca = df_marca.rename(columns={'marca': 'nome_marca'})
 
         valores = [tuple(x) for x in df_marca.to_numpy()]
         query = """
@@ -112,22 +114,16 @@ class ConsolidadoNormalizer:
             VALUES %s
             ON CONFLICT (codigo_marca) DO NOTHING;
         """
-
         with self.engine.begin() as conn:
             with conn.connection.cursor() as cur:
                 execute_values(cur, query, valores)
         print(f"✅ {len(valores)} marcas processadas.")
 
     def inserir_produtos(self, df: pd.DataFrame):
-        df_prod = df.rename(columns={
-            'Produto': 'descricao_produto',
-            'Código produto': 'codigo_produto',
-            'Código da categoria': 'codigo_categoria',
-            'Código da Marca': 'codigo_marca',
-            'Preço de custo': 'preco_custo',
-            'Quantidade estoque': 'quantidade_estoque'
-        }).copy()
+        """Insere produtos no banco, mapeando categoria e marca"""
+        df_prod = df.copy()
 
+        # Buscar ids de categorias e marcas
         with self.engine.begin() as conn:
             categorias = dict(conn.execute(text("SELECT codigo_categoria, id FROM categorias")).fetchall())
             marcas = dict(conn.execute(text("SELECT codigo_marca, id FROM marcas")).fetchall())
@@ -159,44 +155,33 @@ class ConsolidadoNormalizer:
             VALUES %s
             ON CONFLICT (codigo_produto) DO NOTHING;
         """
-
         with self.engine.begin() as conn:
             with conn.connection.cursor() as cur:
                 execute_values(cur, query, valores)
         print(f"✅ {len(valores)} produtos processados.")
 
     def inserir_notas(self, df: pd.DataFrame):
-        df_notas = df.rename(columns={
-            'Numero nota fiscal': 'numero_nota_fiscal',
-            'Data da venda': 'data_venda',
-            'Valor da nota': 'valor_nota'
-        }).copy()
+        """Insere notas fiscais no banco"""
+        df_notas = df.copy()
+        valores = [tuple(x) for x in df_notas[['numero_nota_fiscal', 'data_venda', 'valor_da_nota']].to_numpy()]
 
-        valores = [tuple(x) for x in df_notas[['numero_nota_fiscal', 'data_venda', 'valor_nota']].to_numpy()]
         query = """
             INSERT INTO notas_fiscais (numero_nota_fiscal, data_venda, valor_nota)
             VALUES %s
             ON CONFLICT (numero_nota_fiscal) DO NOTHING;
         """
-
         with self.engine.begin() as conn:
             with conn.connection.cursor() as cur:
                 execute_values(cur, query, valores)
         print(f"✅ {len(valores)} notas processadas.")
 
     def inserir_itens(self, df: pd.DataFrame):
+        """Insere itens das notas, mapeando FK de notas e produtos"""
         with self.engine.begin() as conn:
             notas = dict(conn.execute(text("SELECT numero_nota_fiscal, id FROM notas_fiscais")).fetchall())
             produtos = dict(conn.execute(text("SELECT codigo_produto, id FROM produtos")).fetchall())
 
-        df_itens = df.rename(columns={
-            'Numero nota fiscal': 'numero_nota_fiscal',
-            'Código produto': 'codigo_produto',
-            'Quantidade do produto': 'quantidade_produto',
-            'Valor unitário': 'valor_unitario',
-            'Valor total produto': 'valor_total_produto'
-        }).copy()
-
+        df_itens = df.copy()
         df_itens['nota_id'] = df_itens['numero_nota_fiscal'].map(notas)
         df_itens['produto_id'] = df_itens['codigo_produto'].map(produtos)
         df_itens = df_itens.dropna(subset=['nota_id', 'produto_id'])
@@ -217,7 +202,6 @@ class ConsolidadoNormalizer:
             VALUES %s
             ON CONFLICT (nota_id, produto_id) DO NOTHING;
         """
-
         with self.engine.begin() as conn:
             with conn.connection.cursor() as cur:
                 execute_values(cur, query, valores)
@@ -227,7 +211,12 @@ class ConsolidadoNormalizer:
     # PIPELINE
     # ---------------------------------------------------------
     def processar(self, df_estoque: pd.DataFrame, df_notas: pd.DataFrame):
-        """Executa o pipeline completo com estoque e notas"""
+        """
+        Executa todo o pipeline de normalização:
+        1. Criação das tabelas
+        2. Inserção de categorias, marcas, produtos
+        3. Inserção de notas fiscais e itens
+        """
         self.criar_tabelas()
         self.inserir_categorias(df_estoque)
         self.inserir_marcas(df_estoque)

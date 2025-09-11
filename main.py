@@ -1,3 +1,11 @@
+"""
+main.py
+
+Interface principal do sistema de recomendação de produtos.
+Utiliza Flet para GUI e PostgreSQL para consulta de produtos,
+substitutos e produtos associados (cross-selling).
+"""
+
 import flet as ft
 import psycopg2
 from sqlalchemy import create_engine
@@ -19,10 +27,15 @@ DB_CONFIG = dict(
     port="5432"
 )
 
-# sua string de conexão
+# String de conexão SQLAlchemy
 conn_str = "postgresql+psycopg2://postgres:dev2025@192.168.0.200:5432/rec"
 
+
+# ------------------------
+# Funções auxiliares
+# ------------------------
 def format_pct(x: float, precision: int = 2) -> str:
+    """Formata número como percentual com precisão definida."""
     try:
         return f"{x:.{precision}f}"
     except Exception:
@@ -30,14 +43,13 @@ def format_pct(x: float, precision: int = 2) -> str:
 
 
 def calcular_margem(preco_custo: Optional[float], preco_venda: Optional[float]) -> Optional[float]:
-    """Calcula margem percentual.
+    """
+    Calcula margem percentual.
 
-    - Fórmula escolhida (margem bruta sobre o preço de venda):
+    Fórmula (margem bruta sobre preço de venda):
         margem% = (preco_venda - preco_custo) / preco_venda * 100
 
-    Observações:
-    - Usei o preço de venda médio histórico (AVG(valor_unitario) em itens_notas) quando disponível.
-    - Se não houver preço de venda ou custo válido, retorna None.
+    Retorna None se preço de venda ou custo inválido.
     """
     if preco_venda is None or preco_venda == 0:
         return None
@@ -49,6 +61,9 @@ def calcular_margem(preco_custo: Optional[float], preco_venda: Optional[float]) 
         return None
 
 
+# ------------------------
+# Função principal
+# ------------------------
 def main(page: ft.Page):
     # ---------------- CONFIGURAÇÕES DA JANELA ----------------
     page.title = "Recomenda"
@@ -58,35 +73,30 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.LIGHT
 
     # ---------------- CONEXÃO COM BANCO ----------------
-    # ---------------- CONEXÃO COM BANCO ----------------
     try:
-        # conexão tradicional (usada para cursor.execute)
+        # conexão psycopg2 (cursor.execute)
         conn = psycopg2.connect(**DB_CONFIG)
     except Exception as e:
         page.add(ft.Text(f"Erro ao conectar com psycopg2: {e}", color=ft.Colors.RED))
         return
 
     try:
-        # conexão SQLAlchemy (usada em pandas.read_sql)
+        # conexão SQLAlchemy (pandas.read_sql)
         engine = create_engine(
-            f"postgresql+psycopg2://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}"
+            f"postgresql+psycopg2://{DB_CONFIG['user']}:{DB_CONFIG['password']}"
+            f"@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']}"
         )
     except Exception as e:
         page.add(ft.Text(f"Erro ao criar engine SQLAlchemy: {e}", color=ft.Colors.RED))
         return
-    # ---------------- VARIÁVEIS DE LOG (mantidas, mas vazias) ----------------
-    log_text = ft.Text("", size=12)
-    barra_progresso = ft.Text("")
-    pbl = ft.Text("")
 
     # ---------------- CONTAINERS DINÂMICOS ----------------
     resultado_pesquisa = ft.Container()
     recomendacao_ui = ft.Container()
     associados_ui = ManualSistema()
     componente_atualizacao = AtualizacaoComponent(conn_str, page)
-    
 
-    # ---------------- FUNÇÕES ----------------
+    # ---------------- FUNÇÕES DA INTERFACE ----------------
     def limpar_pesquisa(e: Optional[ft.ControlEvent] = None):
         campo_pesquisar.value = ""
         resultado_pesquisa.content = None
@@ -95,23 +105,24 @@ def main(page: ft.Page):
         page.update()
 
     def pesquisar(e: Optional[ft.ControlEvent] = None):
-        """Executa a pesquisa por código do produto e atualiza a interface com informações do produto.
-
-        Lógica:
-        1) Busca o produto em `produtos` pelo `codigo_produto`.
-        2) Obtém o preço de venda médio a partir de `itens_notas` (AVG(valor_unitario)).
-        3) Calcula margem percentual usando `calcular_margem`.
-        4) Mostra resultado formatado no `resultado_pesquisa`.
         """
-        query_val = campo_pesquisar.value or ""
-        query_val = query_val.strip()
+        Executa a pesquisa por código do produto e atualiza a interface.
 
+        Passos:
+        1) Busca produto em `produtos`.
+        2) Obtém preço médio de venda (AVG valor_unitario).
+        3) Calcula margem percentual.
+        4) Atualiza containers de resultado, substitutos e associados.
+        """
+        query_val = (campo_pesquisar.value or "").strip()
         if not query_val:
-            resultado_pesquisa.content = ft.Text("Digite o código do produto e pressione Enter ou clique em Pesquisar.")
+            resultado_pesquisa.content = ft.Text(
+                "Digite o código do produto e pressione Enter ou clique em Pesquisar."
+            )
             page.update()
             return
 
-        # tentar interpretar como inteiro (código do ERP)
+        # Interpretar como código inteiro
         try:
             codigo = int(query_val)
         except ValueError:
@@ -119,12 +130,11 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # 1) busca o produto
+        # 1) Busca o produto
         sql_prod = (
             "SELECT id, codigo_produto, descricao_produto, preco_custo, quantidade_estoque "
             "FROM produtos WHERE codigo_produto = %s LIMIT 1;"
         )
-
         try:
             with conn.cursor() as cur:
                 cur.execute(sql_prod, (codigo,))
@@ -135,36 +145,21 @@ def main(page: ft.Page):
             return
 
         if not prod_row:
-            # ---------------- CASO MENSAGEM (NÃO ENCONTRADO) ----------------
-            resultado = {"mensagem": f"Produto {codigo} não encontrado."}
-            resultado_pesquisa.content = ft.Column(
-                [
-                    ft.Text(
-                        "RESULTADO DA PESQUISA:",
-                        size=16,
-                        weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.BLUE_800,
-                    ),
-                    ft.Text(
-                        resultado["mensagem"],
-                        style=ft.TextStyle(
-                            size=18, color=ft.Colors.BLACK, weight=ft.FontWeight.BOLD
-                        ),
-                    ),
-                ]
-            )
+            resultado_pesquisa.content = ft.Column([
+                ft.Text("RESULTADO DA PESQUISA:", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800),
+                ft.Text(f"Produto {codigo} não encontrado.", style=ft.TextStyle(size=18, weight="bold"))
+            ])
             recomendacao_ui.content = None
             page.update()
             return
 
-        # extrai dados do produto
+        # Extrai dados do produto
         produto_id, codigo_produto, descricao_produto, preco_custo, quantidade_estoque = prod_row
 
-        # 2) busca preço médio de venda (itens_notas)
+        # 2) Busca preço médio de venda
         sql_preco_avg = (
             "SELECT AVG(valor_unitario) FROM itens_notas WHERE produto_id = %s AND valor_unitario IS NOT NULL;"
         )
-
         try:
             with conn.cursor() as cur:
                 cur.execute(sql_preco_avg, (produto_id,))
@@ -184,91 +179,37 @@ def main(page: ft.Page):
             "quantidade_estoque": quantidade_estoque,
         }
 
-        resultado_pesquisa.content = ft.Column(
-            [
-                ft.Text(
-                    "RESULTADO DA PESQUISA:",
-                    size=16,
-                    weight=ft.FontWeight.BOLD,
-                    color=ft.Colors.BLUE_800,
-                ),
-                ft.Text(
-                    spans=[
-                        ft.TextSpan(
-                            f"Item {resultado['codigo_produto']} - ",
-                            style=ft.TextStyle(
-                                size=16,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.BLACK45,
-                            ),
-                        ),
-                        ft.TextSpan(
-                            f"{resultado['descricao_produto']}",
-                            style=ft.TextStyle(
-                                size=18, weight="bold", color=ft.Colors.BLACK87
-                            ),
-                        ),
-                        ft.TextSpan(
-                            ", uma Margem de ",
-                            style=ft.TextStyle(
-                                size=16, color=ft.Colors.BLACK45, weight=ft.FontWeight.BOLD
-                            ),
-                        ),
-                        ft.TextSpan(
-                            f"{resultado['margem_percent']}",
-                            style=ft.TextStyle(
-                                size=18, weight="bold", color=ft.Colors.BLACK87
-                            ),
-                        ),
-                        ft.TextSpan(
-                            " com estoque de - ",
-                            style=ft.TextStyle(
-                                size=16, weight="bold", color=ft.Colors.BLACK45
-                            ),
-                        ),
-                        ft.TextSpan(
-                            f"{resultado['quantidade_estoque']}",
-                            style=ft.TextStyle(
-                                size=18, weight="bold", color=ft.Colors.BLACK87
-                            ),
-                        ),
-                        ft.TextSpan(
-                            " unidades.",
-                            style=ft.TextStyle(
-                                size=16, weight="bold", color=ft.Colors.BLACK45
-                            ),
-                        ),
-                    ],
-                    size=16,
-                ),
-            ]
-        )
+        resultado_pesquisa.content = ft.Column([
+            ft.Text("RESULTADO DA PESQUISA:", size=16, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800),
+            ft.Text(
+                spans=[
+                    ft.TextSpan(f"Item {resultado['codigo_produto']} - ", style=ft.TextStyle(size=16, weight="bold", color=ft.Colors.BLACK45)),
+                    ft.TextSpan(f"{resultado['descricao_produto']}", style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLACK87)),
+                    ft.TextSpan(", uma Margem de ", style=ft.TextStyle(size=16, color=ft.Colors.BLACK45, weight="bold")),
+                    ft.TextSpan(f"{resultado['margem_percent']}", style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLACK87)),
+                    ft.TextSpan(" com estoque de - ", style=ft.TextStyle(size=16, weight="bold", color=ft.Colors.BLACK45)),
+                    ft.TextSpan(f"{resultado['quantidade_estoque']}", style=ft.TextStyle(size=18, weight="bold", color=ft.Colors.BLACK87)),
+                    ft.TextSpan(" unidades.", style=ft.TextStyle(size=16, weight="bold", color=ft.Colors.BLACK45)),
+                ],
+                size=16
+            ),
+        ])
 
         # ------------------- SUBSTITUTOS -------------------
-        substitutos = RecomendadorSubstitutoDB(engine, int(campo_pesquisar.value)) 
+        substitutos = RecomendadorSubstitutoDB(engine, int(campo_pesquisar.value))
         df_subs = substitutos.recomendar_substitutos(n=3)
-
-        tabela_subs = TabelaRecomendacao().criar_tabela(df_subs)
-        recomendacao_ui.content = tabela_subs
+        recomendacao_ui.content = TabelaRecomendacao().criar_tabela(df_subs)
         page.update()
 
         # ------------------- ASSOCIADOS -------------------
-        valor_pesquisa = campo_pesquisar.value.strip()
-        if not valor_pesquisa:
-            # Exiba uma mensagem de erro ou apenas retorne
-            print("Campo de pesquisa vazio.")
-            return
-
         try:
-            codigo = int(valor_pesquisa)
+            codigo = int(campo_pesquisar.value.strip())
         except ValueError:
             print("Digite um código válido.")
             return
 
-        tabela_associados = TabelaAssociados(engine).criar_tabela(codigo)
-        associados_ui.content = tabela_associados
+        associados_ui.content = TabelaAssociados(engine).criar_tabela(codigo)
         page.update()
-
 
     # ---------------- ELEMENTOS DA INTERFACE ----------------
     titulo = ft.Text(
@@ -296,25 +237,13 @@ def main(page: ft.Page):
     botao_limpar = ft.TextButton(text="Limpar pesquisa", on_click=limpar_pesquisa)
 
     barra_pesquisa = ft.Row(
-        [
-            campo_pesquisar,
-            botao_pesquisar,
-            botao_limpar,
-            ft.VerticalDivider(width=2, color=ft.Colors.AMBER),
-            componente_atualizacao
-        ],
+        [campo_pesquisar, botao_pesquisar, botao_limpar, ft.VerticalDivider(width=2, color=ft.Colors.AMBER), componente_atualizacao],
         alignment=ft.MainAxisAlignment.START,
         spacing=10,
     )
 
     conteudo = ft.Column(
-        [
-            resultado_pesquisa,
-            ft.Divider(height=10),
-            recomendacao_ui,
-            ft.Divider(height=10),
-            associados_ui
-        ],
+        [resultado_pesquisa, ft.Divider(height=10), recomendacao_ui, ft.Divider(height=10), associados_ui],
         alignment=ft.MainAxisAlignment.START,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         spacing=8,
@@ -329,28 +258,20 @@ def main(page: ft.Page):
     )
 
     layout_principal = ft.Column(
-        [
-            titulo, 
-            ft.Divider(height=8), 
-            barra_pesquisa, 
-            ft.Divider(height=8), 
-            conteudo, 
-            ft.Divider(), 
-            barra_status
-        ],
+        [titulo, ft.Divider(height=8), barra_pesquisa, ft.Divider(height=8), conteudo, ft.Divider(), barra_status],
         expand=True,
         scroll=True,
         spacing=12,
     )
 
     page.add(layout_principal)
+
     # registra os pickers invisíveis
     page.overlay.append(componente_atualizacao.file_picker_estoque)
     page.overlay.append(componente_atualizacao.file_picker_notas)
 
     # abre senha na inicialização (opcional)
     componente_atualizacao.liberar_controles()
-
 
     # garante que a conexão seja fechada ao fechar a janela
     def on_close(e):
@@ -362,5 +283,8 @@ def main(page: ft.Page):
     page.on_close = on_close
 
 
+# ------------------------
+# Entry point
+# ------------------------
 if __name__ == "__main__":
     ft.app(target=main)

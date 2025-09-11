@@ -1,22 +1,281 @@
-# atualizar.py
+"""
+Refatoração de atualizar.py
+- Mantive as assinaturas públicas e os nomes dos métodos principais da classe `AtualizacaoComponent`.
+- Separei responsabilidades em 3 helpers internos (PasswordController, FileHandler, WorkerCoordinator) para:
+    * isolar lógica de senha
+    * isolar manipulação/validação de arquivos
+    * coordenar o pipeline de processamento (worker)
+
+Objetivo: melhorar legibilidade e facilitar testes sem mudar a API usada externamente.
+"""
+
 import os
-import pandas as pd
 import shutil
 import threading
-import flet as ft
 from typing import Optional
+
+import flet as ft
+import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+
+# Componentes externos (mantidos)
 from atualizador_regras import AtualizarRegras
-from associados import CrossSellingSimples  # sua classe
+from associados import CrossSellingSimples
 
 
+# ------------------------ Helpers internos ------------------------
+class _PasswordController:
+    """Controla o comportamento do campo de senha e habilita/desabilita controles.
+
+    Recebe a instância do componente e age sobre seus elementos UI já existentes.
+    """
+
+    def __init__(self, parent):
+        self.parent = parent
+
+    def toggle(self):
+        show = not self.parent.password_row.visible
+        self.parent.password_row.visible = show
+        self.parent.pwd_field.visible = show
+        self.parent.btn_confirm_pwd.visible = show
+        self.parent.btn_cancel_pwd.visible = show
+        if show:
+            self.parent.pwd_field.value = ""
+            self.parent.pwd_field.error_text = None
+        self.parent.update()
+
+    def confirm(self, e=None):
+        val = (self.parent.pwd_field.value or "").strip()
+        # Mantive comportamento anterior (senha "1234"). Sugestão: parametrizar.
+        if val == "1234":
+            self.parent.senha_ok = True
+            self.parent.btn_upload_estoque.disabled = False
+            self.parent.btn_upload_notas.disabled = False
+            # esconde a senha
+            self.parent.password_row.visible = False
+            self.parent.pwd_field.visible = False
+            self.parent.btn_confirm_pwd.visible = False
+            self.parent.btn_cancel_pwd.visible = False
+            self.parent._verificar_pronto()
+        else:
+            self.parent.pwd_field.error_text = "Senha incorreta"
+        self.parent.update()
+
+    def cancel(self, e=None):
+        self.parent.password_row.visible = False
+        self.parent.pwd_field.visible = False
+        self.parent.btn_confirm_pwd.visible = False
+        self.parent.btn_cancel_pwd.visible = False
+        self.parent.pwd_field.value = ""
+        self.parent.pwd_field.error_text = None
+        self.parent.update()
+
+
+class _FileHandler:
+    """Gerencia FilePickers, seleção de arquivos e cópia para a pasta `bases`.
+
+    - Mantém os handlers com as mesmas assinaturas presentes no componente.
+    - Atualiza labels e atributos (arquivo_estoque, arquivo_notas) do componente.
+    """
+
+    def __init__(self, parent):
+        self.parent = parent
+
+    def attach_to_page(self, page: ft.Page):
+        # Anexa filepickers ao page.overlay
+        if self.parent.file_picker_estoque not in page.overlay:
+            page.overlay.append(self.parent.file_picker_estoque)
+        if self.parent.file_picker_notas not in page.overlay:
+            page.overlay.append(self.parent.file_picker_notas)
+        self.parent._filepickers_attached = True
+        self.parent.page = page
+        try:
+            self.parent.refresh_stats()
+        finally:
+            self.parent.update()
+
+    def pick_estoque(self, e: Optional[ft.ControlEvent] = None):
+        page = self.parent._get_page(e)
+        if not self.parent.senha_ok:
+            self.parent._toggle_password_row()
+            return
+        if page and not self.parent._filepickers_attached:
+            try:
+                self.attach_to_page(page)
+            except Exception:
+                pass
+        try:
+            self.parent.file_picker_estoque.pick_files(allow_multiple=False)
+        except Exception:
+            if page:
+                page.pick_files(allow_multiple=False, on_result=self.parent._on_estoque_result)
+
+    def pick_notas(self, e: Optional[ft.ControlEvent] = None):
+        page = self.parent._get_page(e)
+        if not self.parent.senha_ok:
+            self.parent._toggle_password_row()
+            return
+        if page and not self.parent._filepickers_attached:
+            try:
+                self.attach_to_page(page)
+            except Exception:
+                pass
+        try:
+            self.parent.file_picker_notas.pick_files(allow_multiple=False)
+        except Exception:
+            if page:
+                page.pick_files(allow_multiple=False, on_result=self.parent._on_notas_result)
+
+    def on_estoque_result(self, ev: ft.FilePickerResultEvent):
+        if ev.files and len(ev.files) > 0:
+            f = ev.files[0]
+            path = getattr(f, "path", None) or getattr(f, "name", None)
+            self.parent.arquivo_estoque = path
+            self.parent.label_arquivo_estoque.value = getattr(f, "name", path)
+        else:
+            self.parent.arquivo_estoque = None
+            self.parent.label_arquivo_estoque.value = "Nenhum arquivo"
+        self.parent._verificar_pronto()
+        self.parent.update()
+
+    def on_notas_result(self, ev: ft.FilePickerResultEvent):
+        if ev.files and len(ev.files) > 0:
+            f = ev.files[0]
+            path = getattr(f, "path", None) or getattr(f, "name", None)
+            self.parent.arquivo_notas = path
+            self.parent.label_arquivo_notas.value = getattr(f, "name", path)
+        else:
+            self.parent.arquivo_notas = None
+            self.parent.label_arquivo_notas.value = "Nenhum arquivo"
+        self.parent._verificar_pronto()
+        self.parent.update()
+
+    def copy_to_bases(self, src_estoque: str, src_notas: str) -> tuple[str, str]:
+        bases = os.path.join(os.getcwd(), "bases")
+        os.makedirs(bases, exist_ok=True)
+        dst_estoque = os.path.join(bases, "relatorio_produtos.xlsx")
+        dst_notas = os.path.join(bases, "relatorio_notas.xlsx")
+        shutil.copy2(src_estoque, dst_estoque)
+        shutil.copy2(src_notas, dst_notas)
+        return dst_estoque, dst_notas
+
+
+class _WorkerCoordinator:
+    """Coordena o pipeline (leitura, limpeza, geração de regras e persistência).
+
+    Mantém o comportamento original do `_worker` mas isolado para facilitar testes.
+    """
+
+    def __init__(self, parent):
+        self.parent = parent
+
+    def _show_snack(self, texto: str):
+        if self.parent.page:
+            try:
+                self.parent.page.snack_bar = ft.SnackBar(ft.Text(texto))
+                self.parent.page.snack_bar.open = True
+                self.parent.page.update()
+            except Exception:
+                pass
+
+    @staticmethod
+    def _extrair_lista_produtos(df):
+        candidatos = [
+            "codigo_produto", "codigo produto", "codigo", "Código produto",
+            "Codigo produto", "Codigo", "cod_produto", "cod_prod"
+        ]
+        for c in candidatos:
+            if c in df.columns:
+                return list(df[c].dropna().unique())
+        for c in df.columns:
+            if df[c].dtype.kind in ("i", "u") and df[c].nunique() > 0:
+                return list(df[c].dropna().unique())
+        raise KeyError(f"Nenhuma coluna de código produto encontrada. Colunas: {df.columns.tolist()}")
+
+    def run(self, senha: str, dst_estoque: str, dst_notas: str):
+        import traceback
+        try:
+            # --- 1) Lendo arquivos
+            self._show_snack("📂 Lendo arquivos Excel...")
+            df_produtos_raw = pd.read_excel(dst_estoque, engine="openpyxl")
+            df_notas_raw = pd.read_excel(dst_notas, engine="openpyxl")
+
+            # --- 2) Limpeza / Normalização
+            self._show_snack("🧹 Limpando e preparando dados...")
+            from limpeza_estoque import EstoqueCleaner
+            from limpeza_notas import NotasCleaner
+            from consolidar import ConsolidadoNormalizer  
+
+            estoque_cleaner = EstoqueCleaner()
+            df_produtos = estoque_cleaner.clean(df_produtos_raw)
+
+            notas_cleaner = NotasCleaner()
+            df_notas = notas_cleaner.clean(df_notas_raw)
+
+            print(df_produtos.columns.tolist())
+            print(df_notas.columns.tolist())
+
+            # --- 2.1) Normalizador Consolidado
+            conn_str = f"postgresql+psycopg2://postgres:{senha}@192.168.0.200:5432/rec"
+            self._show_snack("📊 Criando tabelas normalizadas e salvando dados...")
+            normalizador = ConsolidadoNormalizer(conn_str=conn_str)
+            normalizador.processar(df_estoque=df_produtos, df_notas=df_notas)
+
+            # --- 3) Gerar cross-selling
+            self._show_snack("🔗 Gerando regras de associação...")
+            cross_obj = CrossSellingSimples(df_notas=df_notas, df_produtos=df_produtos)
+            produtos = self._extrair_lista_produtos(df_produtos)
+
+            # --- 4) Atualizar no banco (regras)
+            self._show_snack("💾 Salvando regras no banco de dados...")
+            atualizador = AtualizarRegras(conn_str=conn_str)
+            atualizador.gerar_e_salvar(
+                cross_obj=cross_obj,
+                produtos=produtos,
+                per_product_top_n=5,
+                min_support=0.0001,
+                min_confidence=0.015,
+                min_lift=1.0,
+                min_freq=2,
+                replace_existing=True
+            )
+
+            # --- 5) Finalização
+            self._show_snack("✅ Atualização concluída com sucesso!")
+
+        except Exception as e:
+            print("Erro durante atualização:", e)
+            traceback.print_exc()
+            self._show_snack(f"❌ Erro: {str(e)}")
+        finally:
+            # sempre reativa o botão correto e atualiza stats
+            try:
+                self.parent.btn_atualizar.disabled = False
+            except Exception:
+                try:
+                    self.parent.atualizar_btn.disabled = False
+                except Exception:
+                    pass
+            try:
+                self.parent.update()
+            except Exception:
+                pass
+            try:
+                self.parent.refresh_stats()
+            except Exception:
+                pass
+
+
+# ------------------------ Componente principal (API mantida) ------------------------
 class AtualizacaoComponent(ft.Column):
     """
     Componente para controlar atualização (upload .xlsx + executar AtualizarRegras).
     Uso:
         comp = AtualizacaoComponent(conn_str, page)
         page.add(comp)
+
+    Mantive as assinaturas públicas e os nomes de métodos para compatibilidade.
     """
 
     def __init__(self, conn_str: str, page: Optional[ft.Page] = None):
@@ -47,13 +306,13 @@ class AtualizacaoComponent(ft.Column):
         # botões principais
         self.btn_liberar = ft.TextButton("Liberar", on_click=lambda e: self._toggle_password_row())
         self.btn_upload_estoque = ft.IconButton(
-            icon=ft.Icons.UPLOAD_FILE,  # corrigido
+            icon=ft.Icons.UPLOAD_FILE,
             tooltip="Carregar .xlsx (estoque)",
             disabled=True,
             on_click=lambda e: self.pick_estoque(e),
         )
         self.btn_upload_notas = ft.IconButton(
-            icon=ft.Icons.UPLOAD_FILE,  # corrigido
+            icon=ft.Icons.UPLOAD_FILE,
             tooltip="Carregar .xlsx (notas)",
             disabled=True,
             on_click=lambda e: self.pick_notas(e),
@@ -70,7 +329,12 @@ class AtualizacaoComponent(ft.Column):
         self.file_picker_estoque = ft.FilePicker(on_result=self._on_estoque_result)
         self.file_picker_notas = ft.FilePicker(on_result=self._on_notas_result)
 
-        # monta layout
+        # instanciar helpers passando self (não alteram interface pública)
+        self._pwd_ctrl = _PasswordController(self)
+        self._file_handler = _FileHandler(self)
+        self._worker_coordinator = _WorkerCoordinator(self)
+
+        # monta layout (mantive a estrutura visual)
         self.controls = [
             ft.Container(
                 content=ft.Column(
@@ -140,7 +404,6 @@ class AtualizacaoComponent(ft.Column):
                 self._filepickers_attached = True
             except Exception:
                 pass
-        # atualiza indicadores
         try:
             self.refresh_stats()
         finally:
@@ -201,105 +464,36 @@ class AtualizacaoComponent(ft.Column):
         finally:
             self.update()
 
-    # ---------------- password inline ----------------
+    # ---------------- password inline (delegado) ----------------
     def _toggle_password_row(self):
-        """Mostra/oculta o campo de senha inline."""
-        show = not self.password_row.visible
-        self.password_row.visible = show
-        self.pwd_field.visible = show
-        self.btn_confirm_pwd.visible = show
-        self.btn_cancel_pwd.visible = show
-        if show:
-            # limpa campo
-            self.pwd_field.value = ""
-            self.pwd_field.error_text = None
-        self.update()
+        self._pwd_ctrl.toggle()
 
     def _confirm_password(self, e=None):
-        val = (self.pwd_field.value or "").strip()
-        if val == "1234":
-            self.senha_ok = True
-            self.btn_upload_estoque.disabled = False
-            self.btn_upload_notas.disabled = False
-            # esconde a senha
-            self.password_row.visible = False
-            self.pwd_field.visible = False
-            self.btn_confirm_pwd.visible = False
-            self.btn_cancel_pwd.visible = False
-            self._verificar_pronto()
-        else:
-            self.pwd_field.error_text = "Senha incorreta"
-        self.update()
+        self._pwd_ctrl.confirm(e)
 
     def _cancel_password(self, e=None):
-        self.password_row.visible = False
-        self.pwd_field.visible = False
-        self.btn_confirm_pwd.visible = False
-        self.btn_cancel_pwd.visible = False
-        self.pwd_field.value = ""
-        self.pwd_field.error_text = None
-        self.update()
+        self._pwd_ctrl.cancel(e)
 
-    # ---------------- file pickers ----------------
+    # ---------------- file pickers (delegado) ----------------
     def pick_estoque(self, e: Optional[ft.ControlEvent] = None):
-        page = self._get_page(e)
-        if not self.senha_ok:
-            self._toggle_password_row()
-            return
-        if page and not self._filepickers_attached:
-            self.attach_to_page(page)
-        try:
-            self.file_picker_estoque.pick_files(allow_multiple=False)
-        except Exception:
-            if page:
-                page.pick_files(allow_multiple=False, on_result=self._on_estoque_result)
+        self._file_handler.pick_estoque(e)
 
     def pick_notas(self, e: Optional[ft.ControlEvent] = None):
-        page = self._get_page(e)
-        if not self.senha_ok:
-            self._toggle_password_row()
-            return
-        if page and not self._filepickers_attached:
-            self.attach_to_page(page)
-        try:
-            self.file_picker_notas.pick_files(allow_multiple=False)
-        except Exception:
-            if page:
-                page.pick_files(allow_multiple=False, on_result=self._on_notas_result)
+        self._file_handler.pick_notas(e)
 
     def _on_estoque_result(self, ev: ft.FilePickerResultEvent):
-        if ev.files and len(ev.files) > 0:
-            f = ev.files[0]
-            path = getattr(f, "path", None) or getattr(f, "name", None)
-            self.arquivo_estoque = path
-            self.label_arquivo_estoque.value = getattr(f, "name", path)
-        else:
-            self.arquivo_estoque = None
-            self.label_arquivo_estoque.value = "Nenhum arquivo"
-        self._verificar_pronto()
-        self.update()
+        self._file_handler.on_estoque_result(ev)
 
     def _on_notas_result(self, ev: ft.FilePickerResultEvent):
-        if ev.files and len(ev.files) > 0:
-            f = ev.files[0]
-            path = getattr(f, "path", None) or getattr(f, "name", None)
-            self.arquivo_notas = path
-            self.label_arquivo_notas.value = getattr(f, "name", path)
-        else:
-            self.arquivo_notas = None
-            self.label_arquivo_notas.value = "Nenhum arquivo"
-        self._verificar_pronto()
-        self.update()
+        self._file_handler.on_notas_result(ev)
 
     def _verificar_pronto(self):
         self.btn_atualizar.disabled = not (self.senha_ok and self.arquivo_estoque and self.arquivo_notas)
         self.update()
 
-    # ---------------- executar atualização ----------------
-    # ---------------- executar atualização ----------------
+    # ---------------- executar atualização (mantive assinatura) ----------------
     def on_click_atualizar(self, e: Optional[ft.ControlEvent] = None):
         print("🚀 Entrou no on_click!")
-
         page = self._get_page(e)
         if not self.senha_ok:
             self._toggle_password_row()
@@ -312,14 +506,9 @@ class AtualizacaoComponent(ft.Column):
                 page.update()
             return
 
-        bases = os.path.join(os.getcwd(), "bases")
-        os.makedirs(bases, exist_ok=True)
-        dst_estoque = os.path.join(bases, "relatorio_produtos.xlsx")
-        dst_notas = os.path.join(bases, "relatorio_notas.xlsx")
-
+        # copia arquivos para a pasta bases usando o FileHandler
         try:
-            shutil.copy2(self.arquivo_estoque, dst_estoque)
-            shutil.copy2(self.arquivo_notas, dst_notas)
+            dst_estoque, dst_notas = self._file_handler.copy_to_bases(self.arquivo_estoque, self.arquivo_notas)
         except Exception as ex:
             if page:
                 page.snack_bar = ft.SnackBar(ft.Text(f"Erro ao copiar arquivos: {ex}"))
@@ -332,119 +521,28 @@ class AtualizacaoComponent(ft.Column):
         self.update()
 
         # executa em thread separada para não travar UI
-        senha = "dev2025"  # 🔑 aqui você pode parametrizar, hoje está fixo
+        senha = "dev2025"  # ⚠️ sugiro parametrizar
         threading.Thread(
-            target=self._worker, 
+            target=self._worker,
             args=(senha, dst_estoque, dst_notas),
             daemon=True
         ).start()
 
+    # ---------------- worker (mantive assinatura) ----------------
     def _worker(self, senha: str, dst_estoque: str, dst_notas: str):
         print("🚀 Entrou no _worker!")
-
+        # delega toda a lógica pesada para o WorkerCoordinator
         try:
-            import pandas as pd
-            import traceback
-            from limpeza_estoque import EstoqueCleaner
-            from limpeza_notas import NotasCleaner
-            from associados import CrossSellingSimples
-            from atualizador_regras import AtualizarRegras
-
-            # --- 1) Lendo arquivos
-            print("📂 Lendo arquivos Excel...")
-            if self.page:
-                self.page.snack_bar = ft.SnackBar(ft.Text("📂 Lendo arquivos Excel..."))
-                self.page.snack_bar.open = True
-                self.page.update()
-
-            df_produtos_raw = pd.read_excel(dst_estoque, engine="openpyxl")
-            df_notas_raw = pd.read_excel(dst_notas, engine="openpyxl")
-
-            # --- 2) Limpeza / Normalização
-            print("🧹 Chamando cleaners...")
-            if self.page:
-                self.page.snack_bar = ft.SnackBar(ft.Text("🧹 Limpando e preparando dados..."))
-                self.page.snack_bar.open = True
-                self.page.update()
-
-            # CORREÇÃO AQUI: instanciar sem passar o DataFrame
-            estoque_cleaner = EstoqueCleaner()
-            df_produtos = estoque_cleaner.clean(df_produtos_raw)
-            print("🚀 saiu no estoque!")
-
-            notas_cleaner = NotasCleaner()
-            df_notas = notas_cleaner.clean(df_notas_raw)
-            print("🚀 saiu no notas!")
-
-            # --- utilitário robusto para obter lista de códigos de produto
-            def _extrair_lista_produtos(df):
-                candidatos = [
-                    "codigo_produto", "codigo produto", "codigo", "Código produto",
-                    "Codigo produto", "Codigo", "cod_produto", "cod_prod"
-                ]
-                for c in candidatos:
-                    if c in df.columns:
-                        return list(df[c].dropna().unique())
-                # fallback: pegar todas as colunas numéricas inteiras que parecem códigos
-                for c in df.columns:
-                    if df[c].dtype.kind in ("i", "u") and df[c].nunique() > 0:
-                        return list(df[c].dropna().unique())
-                raise KeyError(f"Nenhuma coluna de código produto encontrada. Colunas: {df.columns.tolist()}")
-
-            # --- 3) Gerar cross-selling
-            print("🔗 Gerando CrossSellingSimples...")
-            if self.page:
-                self.page.snack_bar = ft.SnackBar(ft.Text("🔗 Gerando regras de associação..."))
-                self.page.snack_bar.open = True
-                self.page.update()
-
-            cross_obj = CrossSellingSimples(df_notas=df_notas, df_produtos=df_produtos)
-
-            produtos = _extrair_lista_produtos(df_produtos)
-            print(f"Produtos a processar (exemplo 10): {produtos[:10]} (total {len(produtos)})")
-
-            # --- 4) Atualizar no banco
-            print("💾 Salvando regras no banco...")
-            if self.page:
-                self.page.snack_bar = ft.SnackBar(ft.Text("💾 Salvando regras no banco de dados..."))
-                self.page.snack_bar.open = True
-                self.page.update()
-
-            conn_str = f"postgresql+psycopg2://postgres:{senha}@192.168.0.200:5432/rec"
-            atualizador = AtualizarRegras(conn_str=conn_str)
-
-            atualizador.gerar_e_salvar(
-                cross_obj=cross_obj,
-                produtos=produtos,
-                per_product_top_n=5,
-                min_support=0.0001,
-                min_confidence=0.015,
-                min_lift=1.0,
-                min_freq=2,
-                replace_existing=True
-            )
-
-            # --- 5) Finalização
-            print("✅ Atualização concluída com sucesso!")
-            if self.page:
-                self.page.snack_bar = ft.SnackBar(ft.Text("✅ Atualização concluída com sucesso!"))
-                self.page.snack_bar.open = True
-                self.page.update()
-
+            self._worker_coordinator.run(senha, dst_estoque, dst_notas)
         except Exception as e:
-            print("Erro durante atualização:", e)
-            traceback.print_exc()
-            if self.page:
-                self.page.snack_bar = ft.SnackBar(ft.Text(f"❌ Erro: {str(e)}"))
-                self.page.snack_bar.open = True
-                self.page.update()
+            print("Erro no worker delegador:", e)
         finally:
-            # sempre reativa o botão correto e atualiza stats
+            # qualquer garantia de reativação feita no WorkerCoordinator, mas reforçamos aqui
             try:
                 self.btn_atualizar.disabled = False
             except Exception:
                 try:
-                    self.atualizar_btn.disabled = False  # fallback antigo
+                    self.atualizar_btn.disabled = False
                 except Exception:
                     pass
             try:
@@ -469,5 +567,7 @@ class AtualizacaoComponent(ft.Column):
         self.btn_upload_estoque.disabled = True
         self.btn_upload_notas.disabled = True
         self._verificar_pronto()
-# DEBUGG
-print("🚀 passou aqui!")
+
+
+# DEBUG
+print("🚀 módulo atualizar_refatorado carregado!")
