@@ -300,8 +300,8 @@ class AtualizacaoComponent(ft.Column):
         self.txt_produtos = ft.Text("0", size=18, weight=ft.FontWeight.BOLD)
         self.txt_associados = ft.Text("0", size=18, weight=ft.FontWeight.BOLD)
 
-        self.label_arquivo_estoque = ft.Text("Nenhum arquivo", size=12)
-        self.label_arquivo_notas = ft.Text("Nenhum arquivo", size=12)
+        self.label_arquivo_estoque = ft.Text("Estoque/Produtos", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE)
+        self.label_arquivo_notas = ft.Text("Notas/Vendas", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.RED)
 
         # botões principais
         self.btn_liberar = ft.TextButton("Liberar", on_click=lambda e: self._toggle_password_row())
