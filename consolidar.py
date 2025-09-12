@@ -1,6 +1,9 @@
 import pandas as pd
+import time
 from sqlalchemy import create_engine, text
 from psycopg2.extras import execute_values
+from capturar_log import LogCapture
+
 
 class ConsolidadoNormalizer:
     """
@@ -20,14 +23,16 @@ class ConsolidadoNormalizer:
     - Garantia de integridade das relações (FKs).
     """
 
-    def __init__(self, conn_str: str):
+    def __init__(self, conn_str: str, logger: LogCapture):
+        self.logger = logger
         self.engine = create_engine(conn_str)
-        print("🚀 ConsolidadoNormalizer inicializado.")
+        self.logger.log("inicializado...")
 
     # ---------------------------------------------------------
     # CRIAÇÃO DAS TABELAS
     # ---------------------------------------------------------
     def criar_tabelas(self):
+        self.logger.log("🚀 Cria todas as tabelas!")
         """Cria todas as tabelas normalizadas se não existirem"""
         ddl_statements = [
             """
@@ -82,7 +87,7 @@ class ConsolidadoNormalizer:
         with self.engine.begin() as conn:
             for ddl in ddl_statements:
                 conn.execute(text(ddl))
-        print("✅ Tabelas criadas com sucesso!")
+        self.logger.log("✅ Tabelas criadas com sucesso!")
 
     # ---------------------------------------------------------
     # INSERÇÕES
@@ -101,7 +106,7 @@ class ConsolidadoNormalizer:
         with self.engine.begin() as conn:
             with conn.connection.cursor() as cur:
                 execute_values(cur, query, valores)
-        print(f"✅ {len(valores)} categorias processadas.")
+        self.logger.log(f"✅ {len(valores)} categorias processadas.")
 
     def inserir_marcas(self, df: pd.DataFrame):
         """Insere marcas únicas no banco"""
@@ -117,7 +122,7 @@ class ConsolidadoNormalizer:
         with self.engine.begin() as conn:
             with conn.connection.cursor() as cur:
                 execute_values(cur, query, valores)
-        print(f"✅ {len(valores)} marcas processadas.")
+        self.logger.log(f"✅ {len(valores)} marcas processadas.")
 
     def inserir_produtos(self, df: pd.DataFrame):
         """Insere produtos no banco, mapeando categoria e marca"""
@@ -158,7 +163,7 @@ class ConsolidadoNormalizer:
         with self.engine.begin() as conn:
             with conn.connection.cursor() as cur:
                 execute_values(cur, query, valores)
-        print(f"✅ {len(valores)} produtos processados.")
+        self.logger.log(f"✅ {len(valores)} produtos processados.")
 
     def inserir_notas(self, df: pd.DataFrame):
         """Insere notas fiscais no banco"""
@@ -173,7 +178,7 @@ class ConsolidadoNormalizer:
         with self.engine.begin() as conn:
             with conn.connection.cursor() as cur:
                 execute_values(cur, query, valores)
-        print(f"✅ {len(valores)} notas processadas.")
+        self.logger.log(f"✅ {len(valores)} notas processadas.")
 
     def inserir_itens(self, df: pd.DataFrame):
         """Insere itens das notas, mapeando FK de notas e produtos"""
@@ -205,7 +210,7 @@ class ConsolidadoNormalizer:
         with self.engine.begin() as conn:
             with conn.connection.cursor() as cur:
                 execute_values(cur, query, valores)
-        print(f"✅ {len(valores)} itens processados.")
+        self.logger.log(f"✅ {len(valores)} itens processados.")
 
     # ---------------------------------------------------------
     # PIPELINE
@@ -223,4 +228,4 @@ class ConsolidadoNormalizer:
         self.inserir_produtos(df_estoque)
         self.inserir_notas(df_notas)
         self.inserir_itens(df_notas)
-        print("✅ Pipeline de normalização concluído!")
+        self.logger.log("✅ Pipeline de normalização concluído!")

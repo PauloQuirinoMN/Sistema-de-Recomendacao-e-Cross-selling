@@ -3,17 +3,20 @@ from sqlalchemy import create_engine, text
 from datetime import datetime
 from typing import List, Optional
 from psycopg2.extras import execute_values
+from capturar_log import LogCapture
 
 class AtualizarRegras:
     """
     Classe para criar a tabela de métricas e salvar regras de cross-selling
     geradas pela classe CrossSellingSimples.
     """
+    
 
-    def __init__(self, conn_str: str, tabela: str = "metricas", top_n: Optional[int] = None):
+    def __init__(self, logger: LogCapture, conn_str: str, tabela: str = "metricas", top_n: Optional[int] = None):
         self.tabela = tabela
         self.top_n = top_n
         self.engine = create_engine(conn_str)
+        self.logger = logger
         self._criar_tabela()
 
     def _criar_tabela(self):
@@ -53,7 +56,7 @@ class AtualizarRegras:
         """
 
         # 1) gerar todas as regras (uma execução custosa, mas única)
-        print("[AtualizarRegras] Gerando conjunto completo de regras (uma execução)...")
+        self.logger.log("Gerando conjunto completo de regras (uma execução)...")
         full_rules = cross_obj.gerar_regras(
             min_support=min_support,
             min_confidence=min_confidence,
@@ -65,7 +68,7 @@ class AtualizarRegras:
         )
 
         if full_rules.empty:
-            print("[AtualizarRegras] Nenhuma regra gerada para os parâmetros fornecidos. Abortando.")
+            self.logger.log("Nenhuma regra gerada para os parâmetros fornecidos. Abortando.")
             return
 
         # garantir colunas esperadas
@@ -79,7 +82,7 @@ class AtualizarRegras:
         # 🔎 só manter os produtos que de fato aparecem como antecedente
         produtos_com_regras = set(full_rules['antecedente'].unique())
 
-        print(f"[AtualizarRegras] Regras geradas para {len(produtos_com_regras)} produtos distintos.")
+        self.logger.log(f"Regras geradas para {len(produtos_com_regras)} produtos distintos.")
 
         now = datetime.now()
 
@@ -87,7 +90,7 @@ class AtualizarRegras:
         produtos = list(produtos)
         for i in range(0, len(produtos), chunk_size):
             chunk = produtos[i:i+chunk_size]
-            print(f"[AtualizarRegras] Processando chunk {i+1}-{i+len(chunk)} / {len(produtos)}")
+            self.logger.log(f"Processando  {i+1}-{i+len(chunk)} de {len(produtos)} ... ")
 
             rows_to_insert = []
 
@@ -137,4 +140,4 @@ class AtualizarRegras:
                 execute_values(cur, insert_sql, rows_to_insert)
                 conn.connection.commit()
 
-            print(f"[AtualizarRegras] Inseridas {len(rows_to_insert)} linhas para esse chunk.")
+            self.logger.log(f"Inseridas {len(rows_to_insert)} linhas de Associados!")

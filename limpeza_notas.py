@@ -1,5 +1,6 @@
 import pandas as pd
 from data_utils import normalize_columns, map_columns_by_candidates, ensure_required_columns
+from capturar_log import LogCapture
 
 class NotasCleaner:
     """
@@ -14,7 +15,8 @@ class NotasCleaner:
     - Garante que todas as colunas finais existam no DataFrame.
     """
 
-    def __init__(self):
+    def __init__(self, logger: LogCapture):
+        self.logger = logger
         # Dicionário de candidatos para padronização das colunas
         self.candidates = {
             "numero_nota_fiscal": ["numero_nota_fiscal", "numero_nota", "nota_fiscal", "n_nota", "num_nota"],
@@ -34,7 +36,7 @@ class NotasCleaner:
         ]
 
         # Debug
-        print("🚀 NotasCleaner inicializado.")
+        self.logger.log("🚀 Inicializado limpeza das Notas .")
 
     def clean(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -46,8 +48,6 @@ class NotasCleaner:
         Returns:
             pd.DataFrame: DataFrame limpo e padronizado.
         """
-        print("[INFO][NotasCleaner] Iniciando limpeza...")
-
         # 1️⃣ Normaliza nomes de colunas e mapeia para os padrões canônicos
         df = normalize_columns(df)
         df = map_columns_by_candidates(df, self.candidates)
@@ -62,7 +62,7 @@ class NotasCleaner:
             notas_problema = set(df[df["quantidade_produto"] <= 0]["numero_nota_fiscal"].unique())
             notas_problema.update(df[df["valor_unitario"] == 0]["numero_nota_fiscal"].unique())
             if notas_problema:
-                print(f"[INFO][NotasCleaner] Removendo {len(notas_problema)} notas com problemas (quantidade/valor).")
+                self.logger.log(f"Removendo {len(notas_problema)} notas com problemas (quantidade/valor).")
             df = df[~df["numero_nota_fiscal"].isin(notas_problema)].copy()
 
         # 4️⃣ Remover descrições ambíguas (várias códigos para mesma descrição)
@@ -70,7 +70,7 @@ class NotasCleaner:
             descricoes_amb = df.groupby("descricao_produto")["codigo_produto"].nunique()
             descricoes_amb = descricoes_amb[descricoes_amb > 1].index.tolist()
             if descricoes_amb:
-                print(f"[INFO][NotasCleaner] Removendo {len(descricoes_amb)} descrições ambíguas.")
+                self.logger.log(f"Removendo {len(descricoes_amb)} descrições ambíguas.")
             df = df[~df["descricao_produto"].isin(descricoes_amb)].copy()
 
         # 5️⃣ Calcular valor_total_produto e valor_da_nota
@@ -89,5 +89,5 @@ class NotasCleaner:
         # 7️⃣ Selecionar apenas as colunas finais na ordem desejada
         df = df[self.final_cols].copy()
 
-        print(f"[INFO][NotasCleaner] Limpeza concluída. Total de registros finais: {len(df)}")
+        self.logger.log(f"Limpeza concluída. Total de registros finais: {len(df)}")
         return df

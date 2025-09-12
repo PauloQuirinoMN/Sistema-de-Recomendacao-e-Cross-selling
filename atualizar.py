@@ -11,6 +11,7 @@ Objetivo: melhorar legibilidade e facilitar testes sem mudar a API usada externa
 
 import os
 import shutil
+import time
 import threading
 from typing import Optional
 
@@ -22,7 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 # Componentes externos (mantidos)
 from atualizador_regras import AtualizarRegras
 from associados import CrossSellingSimples
-
+from capturar_log import LogCapture
 
 # ------------------------ Helpers internos ------------------------
 class _PasswordController:
@@ -207,29 +208,27 @@ class _WorkerCoordinator:
             from limpeza_notas import NotasCleaner
             from consolidar import ConsolidadoNormalizer  
 
-            estoque_cleaner = EstoqueCleaner()
+    
+            estoque_cleaner = EstoqueCleaner(logger=self.parent.logger)
             df_produtos = estoque_cleaner.clean(df_produtos_raw)
 
-            notas_cleaner = NotasCleaner()
+            notas_cleaner = NotasCleaner(logger=self.parent.logger)
             df_notas = notas_cleaner.clean(df_notas_raw)
-
-            print(df_produtos.columns.tolist())
-            print(df_notas.columns.tolist())
 
             # --- 2.1) Normalizador Consolidado
             conn_str = f"postgresql+psycopg2://postgres:{senha}@192.168.0.200:5432/rec"
             self._show_snack("📊 Criando tabelas normalizadas e salvando dados...")
-            normalizador = ConsolidadoNormalizer(conn_str=conn_str)
+            normalizador = ConsolidadoNormalizer(conn_str=conn_str, logger=self.parent.logger)
             normalizador.processar(df_estoque=df_produtos, df_notas=df_notas)
 
             # --- 3) Gerar cross-selling
             self._show_snack("🔗 Gerando regras de associação...")
-            cross_obj = CrossSellingSimples(df_notas=df_notas, df_produtos=df_produtos)
+            cross_obj = CrossSellingSimples(df_notas=df_notas, df_produtos=df_produtos, logger=self.parent.logger)
             produtos = self._extrair_lista_produtos(df_produtos)
 
             # --- 4) Atualizar no banco (regras)
             self._show_snack("💾 Salvando regras no banco de dados...")
-            atualizador = AtualizarRegras(conn_str=conn_str)
+            atualizador = AtualizarRegras(conn_str=conn_str, logger=self.parent.logger)
             atualizador.gerar_e_salvar(
                 cross_obj=cross_obj,
                 produtos=produtos,
@@ -289,6 +288,8 @@ class AtualizacaoComponent(ft.Column):
         except Exception:
             self.engine = None
 
+        self.logger = LogCapture(ui_callback=self.update_last_log)
+
         # estado
         self.arquivo_estoque: Optional[str] = None
         self.arquivo_notas: Optional[str] = None
@@ -334,13 +335,16 @@ class AtualizacaoComponent(ft.Column):
         self._file_handler = _FileHandler(self)
         self._worker_coordinator = _WorkerCoordinator(self)
 
-        # monta layout (mantive a estrutura visual)
         self.controls = [
             ft.Container(
                 content=ft.Column(
                     controls=[
-                        ft.Row([ft.Text("Última atualização", weight=ft.FontWeight.BOLD), self.txt_ultima],
-                               alignment=ft.MainAxisAlignment.CENTER),
+                        ft.Row(
+                            [
+                                ft.Text("Última atualização", weight=ft.FontWeight.BOLD),
+                                ft.Row([self.txt_ultima], expand=True)
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_AROUND),
                         ft.Divider(height=10, color=ft.Colors.BLACK12),
                         self.password_row,
                         ft.Row(
@@ -390,6 +394,10 @@ class AtualizacaoComponent(ft.Column):
                 self.attach_to_page(self.page)
             except Exception:
                 pass
+    def update_last_log(self, message: str):
+        # chamado automaticamente pelo logger
+        self.txt_ultima.value = message
+        self.page.update()
 
     # ---------------- integração com page ----------------
     def attach_to_page(self, page: ft.Page):
@@ -446,9 +454,10 @@ class AtualizacaoComponent(ft.Column):
                 r = conn.execute(ultima_sql).scalar()
                 if r is not None:
                     try:
-                        ts = r.strftime("%d/%m/%Y -> %H:%M:%S")
+                        ts = r.strftime("%d/%m/%Y  %H:%M:%S")
                     except Exception:
                         ts = str(r)
+                        ts = ft.TextStyle(size=20)
                     self.txt_ultima.value = ts
                 else:
                     self.txt_ultima.value = "Sem registros"
@@ -493,7 +502,6 @@ class AtualizacaoComponent(ft.Column):
 
     # ---------------- executar atualização (mantive assinatura) ----------------
     def on_click_atualizar(self, e: Optional[ft.ControlEvent] = None):
-        print("🚀 Entrou no on_click!")
         page = self._get_page(e)
         if not self.senha_ok:
             self._toggle_password_row()
@@ -530,8 +538,11 @@ class AtualizacaoComponent(ft.Column):
 
     # ---------------- worker (mantive assinatura) ----------------
     def _worker(self, senha: str, dst_estoque: str, dst_notas: str):
-        print("🚀 Entrou no _worker!")
         # delega toda a lógica pesada para o WorkerCoordinator
+        
+        texto = ft.Text("Aguarde um Instante...", size=20, weight=ft.FontWeight.BOLD)
+        self.logger.log(texto.value)
+        
         try:
             self._worker_coordinator.run(senha, dst_estoque, dst_notas)
         except Exception as e:
@@ -568,6 +579,3 @@ class AtualizacaoComponent(ft.Column):
         self.btn_upload_notas.disabled = True
         self._verificar_pronto()
 
-
-# DEBUG
-print("🚀 módulo atualizar_refatorado carregado!")

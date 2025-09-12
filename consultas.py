@@ -194,6 +194,7 @@ class TabelaAssociados:
         # Cálculo da margem percentual (proteção básica via fillna depois)
         df["margem_percent"] = ((df["preco_venda_medio"] - df["preco_custo"]) / df["preco_venda_medio"] * 100)
         df["margem_percent"] = df["margem_percent"].fillna(0).round(2)
+        df["margem_percent"] = df["margem_percent"].fillna(0).clip(lower=0).round(2)
 
         # Normaliza estoque e conversão
         df["quantidade_estoque"] = pd.to_numeric(df.get("quantidade_estoque", pd.Series()), errors="coerce").fillna(0).astype(int)
@@ -259,7 +260,7 @@ class TabelaAssociados:
                             ft.DataColumn(ft.Text("Descrição", weight=ft.FontWeight.BOLD)),
                             ft.DataColumn(ft.Text("Margem %", weight=ft.FontWeight.BOLD), numeric=True),
                             ft.DataColumn(ft.Text("Estoque", weight=ft.FontWeight.BOLD), numeric=True),
-                            ft.DataColumn(ft.Text("Taxa de Conversão", weight=ft.FontWeight.BOLD), numeric=True),
+                            ft.DataColumn(ft.Text("Taxa de Conversão", weight=ft.FontWeight.BOLD), numeric=True, tooltip=("% de quanto podem ser comprados juntos!")),
                         ],
                         rows=rows,
                         border=ft.border.all(1, ft.Colors.BLUE_GREY_200),

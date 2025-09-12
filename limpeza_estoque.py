@@ -1,6 +1,7 @@
 import pandas as pd
 from data_utils import normalize_columns, map_columns_by_candidates
 from typing import List
+from capturar_log import LogCapture
 
 class EstoqueCleaner:
     """
@@ -12,9 +13,11 @@ class EstoqueCleaner:
     - Remove produtos com múltiplos códigos.
     - Garante que colunas mínimas existam, preenchendo NaN quando necessário.
     """
+        
 
-    def __init__(self):
+    def __init__(self, logger: LogCapture):
         # Dicionário de candidatos para padronização das colunas
+        self.logger = logger
         self.candidates = {
             "codigo_produto": ["codigo_produto", "codigo", "cod_produto", "cod_prod"],
             "descricao_produto": ["produto", "descricao", "nome_produto"],
@@ -30,7 +33,7 @@ class EstoqueCleaner:
         self.required = ["codigo_produto", "descricao_produto", "preco_custo", "quantidade_estoque"]
 
         # Debug
-        print("🚀 EstoqueCleaner inicializado.")
+        self.logger.log("🚀 Inicializado limpeza do estoque .")
 
     def clean(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -42,7 +45,6 @@ class EstoqueCleaner:
         Returns:
             pd.DataFrame: DataFrame limpo e padronizado.
         """
-        print("[INFO][EstoqueCleaner] Iniciando limpeza...")
 
         # 1️⃣ Normaliza nomes de colunas e mapeia para os padrões canônicos
         df = normalize_columns(df)
@@ -60,7 +62,7 @@ class EstoqueCleaner:
             produto_multiplos = df.groupby("descricao_produto")["codigo_produto"].nunique()
             problemas = produto_multiplos[produto_multiplos > 1].index
             if len(problemas) > 0:
-                print(f"[WARN][EstoqueCleaner] Produtos removidos por múltiplos códigos: {len(problemas)}")
+                self.logger.log(f"Produtos removidos por múltiplos códigos: {len(problemas)}")
                 df = df[~df["descricao_produto"].isin(problemas)].copy()
 
         # 5️⃣ Garantir colunas mínimas
@@ -68,5 +70,5 @@ class EstoqueCleaner:
             if c not in df.columns:
                 df[c] = pd.NA
 
-        print(f"[INFO][EstoqueCleaner] Limpeza concluída. Total de registros finais: {len(df)}")
+        self.logger.log(f"Limpeza concluída. Total de registros finais: {len(df)}")
         return df

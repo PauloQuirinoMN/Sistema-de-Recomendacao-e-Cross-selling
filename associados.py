@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 from mlxtend.frequent_patterns import fpgrowth, association_rules
+from capturar_log import LogCapture
 
 class CrossSellingSimples:
     """
@@ -19,12 +20,14 @@ class CrossSellingSimples:
 
     def __init__(
         self,
+        logger: LogCapture,
         df_notas: pd.DataFrame,
         df_produtos: Optional[pd.DataFrame] = None,
         codigo_nota_col: str = "numero_nota_fiscal",
         codigo_prod_col: str = "codigo_produto",
         prod_code_col: str = "codigo_produto",
-        prod_desc_col: str = "descricao_produto"
+        prod_desc_col: str = "descricao_produto", 
+        
     ):
         self.df_notas = df_notas.copy()
         self.df_produtos = df_produtos.copy() if df_produtos is not None else None
@@ -32,6 +35,7 @@ class CrossSellingSimples:
         self.codigo_prod_col = codigo_prod_col
         self.prod_code_col = prod_code_col
         self.prod_desc_col = prod_desc_col
+        self.logger = logger
 
         # Validação rápida das colunas obrigatórias
         if self.codigo_nota_col not in self.df_notas.columns or self.codigo_prod_col not in self.df_notas.columns:
@@ -39,6 +43,7 @@ class CrossSellingSimples:
                 f"df_notas precisa conter as colunas '{self.codigo_nota_col}' e '{self.codigo_prod_col}'"
             )
 
+        self.logger.log("🚀 Inicializado limpeza das notas.")
     # ---------------- Filtro por frequência mínima ----------------
     def _aplicar_min_freq(self, min_freq: Optional[int]) -> pd.DataFrame:
         """
@@ -81,10 +86,10 @@ class CrossSellingSimples:
         df = self._aplicar_min_freq(min_freq)
         n_transacoes = df[self.codigo_nota_col].nunique()
         produtos_distintos = df[self.codigo_prod_col].nunique()
-        print(f"[CrossSelling] transações: {n_transacoes} | produtos distintos (após min_freq): {produtos_distintos}")
+        self.logger.log(f"{n_transacoes} Transações com {produtos_distintos} Produtos distintos")
 
         if produtos_distintos == 0 or n_transacoes == 0:
-            print("[CrossSelling] após filtro não há dados suficientes.")
+            self.logger.log("Após filtro não há dados suficientes.")
             return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
 
         # 2) Mapear produtos para colunas (one-hot)
@@ -105,7 +110,7 @@ class CrossSellingSimples:
         data = np.ones(len(rows), dtype=np.int8)
 
         if len(rows) == 0:
-            print("[CrossSelling] nenhuma célula ativa na matriz (após filtro).")
+            self.logger.log("Nenhuma célula ativa na matriz (após filtro).")
             return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
 
         spmatrix = sp.csr_matrix((data, (rows, cols)), shape=(len(grouped), n_products))
@@ -119,7 +124,7 @@ class CrossSellingSimples:
         # 5) FP-Growth
         frequent_itemsets = fpgrowth(df_onehot, min_support=min_support, use_colnames=True, max_len=max_len)
         if frequent_itemsets.empty:
-            print("[CrossSelling] nenhum itemset frequente encontrado.")
+            self.logger.log("Nenhum itemset frequente encontrado.")
             del df_onehot
             gc.collect()
             return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
@@ -129,7 +134,7 @@ class CrossSellingSimples:
             frequent_itemsets['itemset_count'] = (frequent_itemsets['support'] * len(df_onehot)).round().astype(int)
             frequent_itemsets = frequent_itemsets[frequent_itemsets['itemset_count'] >= min_itemset_count].drop(columns=['itemset_count'])
             if frequent_itemsets.empty:
-                print("[CrossSelling] nenhum itemset após filtro por min_itemset_count.")
+                self.logger.log("Nenhum itemset após filtro por min_itemset_count.")
                 del df_onehot
                 gc.collect()
                 return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
@@ -137,7 +142,7 @@ class CrossSellingSimples:
         # 7) Regras de associação
         rules = association_rules(frequent_itemsets, metric="confidence", min_threshold=min_confidence)
         if rules.empty:
-            print("[CrossSelling] nenhuma regra gerada.")
+            self.logger.log("Nenhuma regra gerada.")
             del df_onehot, frequent_itemsets
             gc.collect()
             return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
@@ -145,7 +150,7 @@ class CrossSellingSimples:
         # 8) Filtrar por lift
         rules = rules[rules['lift'] >= min_lift]
         if rules.empty:
-            print("[CrossSelling] nenhuma regra com lift >= min_lift.")
+            self.logger.log("Nenhuma regra com lift >= min_lift.")
             del df_onehot, frequent_itemsets
             gc.collect()
             return pd.DataFrame(columns=['antecedente', 'consequente', 'suporte', 'confianca', 'lift'])
