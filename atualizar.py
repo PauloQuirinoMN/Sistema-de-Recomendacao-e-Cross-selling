@@ -171,15 +171,6 @@ class _WorkerCoordinator:
     def __init__(self, parent):
         self.parent = parent
 
-    def _show_snack(self, texto: str):
-        if self.parent.page:
-            try:
-                self.parent.page.snack_bar = ft.SnackBar(ft.Text(texto))
-                self.parent.page.snack_bar.open = True
-                self.parent.page.update()
-            except Exception:
-                pass
-
     @staticmethod
     def _extrair_lista_produtos(df):
         candidatos = [
@@ -198,17 +189,16 @@ class _WorkerCoordinator:
         import traceback
         try:
             # --- 1) Lendo arquivos
-            self._show_snack("📂 Lendo arquivos Excel...")
+            self.parent.logger.log("📂 Lendo arquivos Excel...")
             df_produtos_raw = pd.read_excel(dst_estoque, engine="openpyxl")
             df_notas_raw = pd.read_excel(dst_notas, engine="openpyxl")
 
             # --- 2) Limpeza / Normalização
-            self._show_snack("🧹 Limpando e preparando dados...")
+            self.parent.logger.log  ("🧹 Limpando e preparando dados...")
             from limpeza_estoque import EstoqueCleaner
             from limpeza_notas import NotasCleaner
             from consolidar import ConsolidadoNormalizer  
 
-    
             estoque_cleaner = EstoqueCleaner(logger=self.parent.logger)
             df_produtos = estoque_cleaner.clean(df_produtos_raw)
 
@@ -217,17 +207,17 @@ class _WorkerCoordinator:
 
             # --- 2.1) Normalizador Consolidado
             conn_str = f"postgresql+psycopg2://postgres:{senha}@192.168.0.200:5432/rec"
-            self._show_snack("📊 Criando tabelas normalizadas e salvando dados...")
+            self.parent.logger.log("📊 Criando tabelas normalizadas e salvando dados...")
             normalizador = ConsolidadoNormalizer(conn_str=conn_str, logger=self.parent.logger)
             normalizador.processar(df_estoque=df_produtos, df_notas=df_notas)
 
             # --- 3) Gerar cross-selling
-            self._show_snack("🔗 Gerando regras de associação...")
+            self.parent.logger.log("🔗 Gerando regras de associação...")
             cross_obj = CrossSellingSimples(df_notas=df_notas, df_produtos=df_produtos, logger=self.parent.logger)
             produtos = self._extrair_lista_produtos(df_produtos)
 
             # --- 4) Atualizar no banco (regras)
-            self._show_snack("💾 Salvando regras no banco de dados...")
+            self.parent.logger.log("💾 Salvando regras no banco de dados...")
             atualizador = AtualizarRegras(conn_str=conn_str, logger=self.parent.logger)
             atualizador.gerar_e_salvar(
                 cross_obj=cross_obj,
@@ -241,12 +231,12 @@ class _WorkerCoordinator:
             )
 
             # --- 5) Finalização
-            self._show_snack("✅ Atualização concluída com sucesso!")
+            self.parent.logger.log("✅ Atualização concluída com sucesso!")
 
         except Exception as e:
             print("Erro durante atualização:", e)
             traceback.print_exc()
-            self._show_snack(f"❌ Erro: {str(e)}")
+            self.parent.logger.log(f"❌ Erro: {str(e)}")
         finally:
             # sempre reativa o botão correto e atualiza stats
             try:
@@ -321,10 +311,20 @@ class AtualizacaoComponent(ft.Column):
         self.btn_atualizar = ft.TextButton("Atualizar", disabled=True, on_click=lambda e: self.on_click_atualizar(e))
 
         # campo de senha inline (inicialmente escondido)
-        self.pwd_field = ft.TextField(password=True, width=260, visible=False, on_submit=lambda ev: self._confirm_password(ev))
+        self.pwd_field = ft.TextField(password=True, width=360, height=100, visible=False, autofocus=True, on_submit=lambda ev: self._confirm_password(ev))
         self.btn_confirm_pwd = ft.TextButton("Confirmar", visible=False, on_click=lambda e: self._confirm_password(e))
         self.btn_cancel_pwd = ft.TextButton("Cancelar", visible=False, on_click=lambda e: self._cancel_password(e))
-        self.password_row = ft.Row([self.pwd_field, self.btn_confirm_pwd, self.btn_cancel_pwd], spacing=6, visible=False)
+        self.password_row = ft.Row(
+            [
+                self.pwd_field, 
+                self.btn_confirm_pwd, 
+                self.btn_cancel_pwd
+            ],
+            alignment=ft.MainAxisAlignment.CENTER, 
+            vertical_alignment=ft.CrossAxisAlignment.START,
+            spacing=5,
+            visible=False,
+        )
 
         # FilePickers (anexar depois via attach_to_page)
         self.file_picker_estoque = ft.FilePicker(on_result=self._on_estoque_result)
@@ -376,6 +376,7 @@ class AtualizacaoComponent(ft.Column):
                 bgcolor=ft.Colors.WHITE,
                 border=ft.border.all(1, ft.Colors.BLACK12),
                 border_radius=8,
+                shadow=ft.BoxShadow(blur_radius=4, color=ft.Colors.BLUE_100, offset=ft.Offset(2, 2)),                
                 expand=True,
                 height=140,
                 width=600,
@@ -473,7 +474,7 @@ class AtualizacaoComponent(ft.Column):
         finally:
             self.update()
 
-    # ---------------- password inline (delegado) ----------------
+    # ---------------- password inline ----------------
     def _toggle_password_row(self):
         self._pwd_ctrl.toggle()
 
@@ -500,7 +501,7 @@ class AtualizacaoComponent(ft.Column):
         self.btn_atualizar.disabled = not (self.senha_ok and self.arquivo_estoque and self.arquivo_notas)
         self.update()
 
-    # ---------------- executar atualização (mantive assinatura) ----------------
+    # ---------------- executar atualização ----------------
     def on_click_atualizar(self, e: Optional[ft.ControlEvent] = None):
         page = self._get_page(e)
         if not self.senha_ok:
@@ -508,20 +509,14 @@ class AtualizacaoComponent(ft.Column):
             return
 
         if not (self.arquivo_estoque and self.arquivo_notas):
-            if page:
-                page.snack_bar = ft.SnackBar(ft.Text("Selecione estoque e notas antes de atualizar."))
-                page.snack_bar.open = True
-                page.update()
+            self.logger.log("Selecione estoque e notas antes de atualizar.")
             return
 
         # copia arquivos para a pasta bases usando o FileHandler
         try:
             dst_estoque, dst_notas = self._file_handler.copy_to_bases(self.arquivo_estoque, self.arquivo_notas)
         except Exception as ex:
-            if page:
-                page.snack_bar = ft.SnackBar(ft.Text(f"Erro ao copiar arquivos: {ex}"))
-                page.snack_bar.open = True
-                page.update()
+            self.logger.log(f"Erro ao copiar arquivos: {ex}")
             return
 
         # desabilita botão até terminar
@@ -529,33 +524,27 @@ class AtualizacaoComponent(ft.Column):
         self.update()
 
         # executa em thread separada para não travar UI
-        senha = "dev2025"  # ⚠️ sugiro parametrizar
+        senha = "dev2025"  # ⚠️ futuramente uma parametrização segura
         threading.Thread(
             target=self._worker,
             args=(senha, dst_estoque, dst_notas),
             daemon=True
         ).start()
 
-    # ---------------- worker (mantive assinatura) ----------------
+    # ---------------- worker ----------------
     def _worker(self, senha: str, dst_estoque: str, dst_notas: str):
-        # delega toda a lógica pesada para o WorkerCoordinator
-        
+        # Exibe mensagem inicial no logger
         texto = ft.Text("Aguarde um Instante...", size=20, weight=ft.FontWeight.BOLD)
         self.logger.log(texto.value)
-        
+
         try:
+            # roda o processamento pesado delegando ao coordenador
             self._worker_coordinator.run(senha, dst_estoque, dst_notas)
         except Exception as e:
             print("Erro no worker delegador:", e)
         finally:
-            # qualquer garantia de reativação feita no WorkerCoordinator, mas reforçamos aqui
-            try:
-                self.btn_atualizar.disabled = False
-            except Exception:
-                try:
-                    self.atualizar_btn.disabled = False
-                except Exception:
-                    pass
+            # Após processamento, desabilita todos os botões exceto "Liberar"
+            self.liberar_controles()
             try:
                 self.update()
             except Exception:
@@ -565,17 +554,20 @@ class AtualizacaoComponent(ft.Column):
             except Exception:
                 pass
 
+
     # ---------------- utilitários ----------------
     def get_selected_files(self):
         return self.arquivo_estoque, self.arquivo_notas
 
     def liberar_controles(self):
         """
-        Método adicionado para permitir a chamada externa sem gerar AttributeError.
-        Habilita uploads e verifica botão de atualização.
+        Apenas mantém o botão de liberar disponível após o processamento.
+        Usuário precisa fornecer a senha para nova atualização.
         """
-        self.senha_ok = True
+        self.senha_ok = False  # garante que a senha seja solicitada
         self.btn_upload_estoque.disabled = True
         self.btn_upload_notas.disabled = True
-        self._verificar_pronto()
+        self.btn_atualizar.disabled = True  # botão de atualizar também fica desabilitado
+        self.update()
+
 
