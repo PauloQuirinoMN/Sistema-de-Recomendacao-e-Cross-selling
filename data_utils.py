@@ -88,3 +88,21 @@ def ensure_required_columns(df: pd.DataFrame, required: List[str]):
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"DataFrame precisa conter as colunas: {missing}")
+
+def safe_run(logger=None):
+    """
+    Decorador para capturar exceções e registrar no logger ou console.
+    Pode ser usado em qualquer função/método do projeto.
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if logger:
+                    logger.log(f"❌ Erro em {func.__name__}: {e}")
+                else:
+                    print(f"❌ Erro em {func.__name__}: {e}")
+                return None
+        return wrapper
+    return decorator

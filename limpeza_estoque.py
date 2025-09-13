@@ -1,7 +1,9 @@
 import pandas as pd
+import time
 from data_utils import normalize_columns, map_columns_by_candidates
 from typing import List
 from capturar_log import LogCapture
+
 
 class EstoqueCleaner:
     """
@@ -36,39 +38,57 @@ class EstoqueCleaner:
         self.logger.log("🚀 Inicializado limpeza do estoque .")
 
     def clean(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Limpa e padroniza a base de estoque.
+        try:
+            # 1️⃣ Normaliza nomes de colunas e mapeia para os padrões canônicos
+            df = normalize_columns(df)
+            df = map_columns_by_candidates(df, self.candidates)
 
-        Args:
-            df (pd.DataFrame): DataFrame original de estoque.
+            # 2️⃣ Checa se a coluna essencial existe
+            if "quantidade_estoque" not in df.columns:
+                raise KeyError("Coluna 'quantidade_estoque' não encontrada no arquivo.")
 
-        Returns:
-            pd.DataFrame: DataFrame limpo e padronizado.
-        """
+            # 3️⃣ Conversões básicas
+            df["quantidade_estoque"] = (
+                pd.to_numeric(df["quantidade_estoque"], errors="coerce")
+                .fillna(0)
+                .astype(int)
+            )
+            df["preco_custo"] = (
+                pd.to_numeric(df.get("preco_custo", 0.0), errors="coerce")
+                .fillna(0.0)
+                .round(2)
+            )
 
-        # 1️⃣ Normaliza nomes de colunas e mapeia para os padrões canônicos
-        df = normalize_columns(df)
-        df = map_columns_by_candidates(df, self.candidates)
+            # 4️⃣ Remover espaços em branco nos nomes das colunas
+            df.columns = df.columns.str.strip()
 
-        # 2️⃣ Conversões básicas e preenchimento de valores nulos
-        df["quantidade_estoque"] = pd.to_numeric(df.get("quantidade_estoque", 0), errors="coerce").fillna(0).astype(int)
-        df["preco_custo"] = pd.to_numeric(df.get("preco_custo", 0.0), errors="coerce").fillna(0.0).round(2)
+            # 5️⃣ Remover produtos com múltiplos códigos
+            if "descricao_produto" in df.columns and "codigo_produto" in df.columns:
+                produto_multiplos = df.groupby("descricao_produto")["codigo_produto"].nunique()
+                problemas = produto_multiplos[produto_multiplos > 1].index
+                if len(problemas) > 0:
+                    self.logger.log(f"Produtos removidos por múltiplos códigos: {len(problemas)}")
+                    df = df[~df["descricao_produto"].isin(problemas)].copy()
 
-        # 3️⃣ Remover espaços em branco nos nomes das colunas
-        df.columns = df.columns.str.strip()
+            # 6️⃣ Garantir colunas mínimas
+            for c in self.required:
+                if c not in df.columns:
+                    df[c] = pd.NA
 
-        # 4️⃣ Remover produtos com múltiplos códigos
-        if "descricao_produto" in df.columns and "codigo_produto" in df.columns:
-            produto_multiplos = df.groupby("descricao_produto")["codigo_produto"].nunique()
-            problemas = produto_multiplos[produto_multiplos > 1].index
-            if len(problemas) > 0:
-                self.logger.log(f"Produtos removidos por múltiplos códigos: {len(problemas)}")
-                df = df[~df["descricao_produto"].isin(problemas)].copy()
+            self.logger.log(f"Limpeza concluída. Total de registros finais: {len(df)}")
+            return df
 
-        # 5️⃣ Garantir colunas mínimas
-        for c in self.required:
-            if c not in df.columns:
-                df[c] = pd.NA
+        except Exception as e:
+            # Logar erro e interromper
+            if self.logger:
+                self.logger.log(f"❌ Erro ao processar arquivo de estoque (.xlsx): {e}")
+                self.logger.log("🔄 Por favor, corrija o arquivo e selecione novamente.")
+            else:
+                print(f"❌ Erro ao processar arquivo de estoque (.xlsx): {e}")
 
-        self.logger.log(f"Limpeza concluída. Total de registros finais: {len(df)}")
-        return df
+            # limpar caminhos para forçar reenvio
+            self.arquivo_estoque = None
+            self.arquivo_notas = None
+
+            time.sleep(5)
+            raise
