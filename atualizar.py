@@ -20,7 +20,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-# Componentes externos (mantidos)
+# Componentes externos 
 from atualizador_regras import AtualizarRegras
 from associados import CrossSellingSimples
 from capturar_log import LogCapture
@@ -48,8 +48,7 @@ class _PasswordController:
 
     def confirm(self, e=None):
         val = (self.parent.pwd_field.value or "").strip()
-        # Mantive comportamento anterior (senha "1234"). Sugestão: parametrizar.
-        if val == "1234":
+        if val == "123ja":
             self.parent.senha_ok = True
             self.parent.btn_upload_estoque.disabled = False
             self.parent.btn_upload_notas.disabled = False
@@ -262,9 +261,7 @@ class AtualizacaoComponent(ft.Column):
     Componente para controlar atualização (upload .xlsx + executar AtualizarRegras).
     Uso:
         comp = AtualizacaoComponent(conn_str, page)
-        page.add(comp)
-
-    Mantive as assinaturas públicas e os nomes de métodos para compatibilidade.
+        page.add(comp).
     """
 
     def __init__(self, conn_str: str, page: Optional[ft.Page] = None):
@@ -287,24 +284,35 @@ class AtualizacaoComponent(ft.Column):
         self._filepickers_attached = False
 
         # labels e elementos UI
-        self.txt_ultima = ft.Text("Última atualização: —", size=12)
+        self.txt_ultima = ft.Text("Última atualização: —", size=15, weight=ft.FontWeight.BOLD, color=ft.Colors.BLACK54)
         self.txt_produtos = ft.Text("0", size=18, weight=ft.FontWeight.BOLD)
         self.txt_associados = ft.Text("0", size=18, weight=ft.FontWeight.BOLD)
 
-        self.label_arquivo_estoque = ft.Text("Estoque/Produtos", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE)
-        self.label_arquivo_notas = ft.Text("Notas/Vendas", size=12, weight=ft.FontWeight.BOLD, color=ft.Colors.RED)
+        self.label_arquivo_estoque = ft.Text("Estoque/Produtos", size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800)
+        self.label_arquivo_notas = ft.Text("Notas/Vendas", size=14, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_800)
 
         # botões principais
         self.btn_liberar = ft.TextButton("Liberar", on_click=lambda e: self._toggle_password_row())
         self.btn_upload_estoque = ft.IconButton(
             icon=ft.Icons.UPLOAD_FILE,
-            tooltip="Carregar .xlsx (estoque)",
+            tooltip="COLUNAS OBRIGATÓRIAS:\n"
+                        "•	codigo_produto → identificador único do produto\n"
+                        "•	descricao_produto → nome/descrição do produto\n"
+                        "•	preco_custo → custo unitário\n"
+                         "•	quantidade_estoque → quantidade disponível em estoque\n",
             disabled=True,
             on_click=lambda e: self.pick_estoque(e),
         )
+        
         self.btn_upload_notas = ft.IconButton(
             icon=ft.Icons.UPLOAD_FILE,
-            tooltip="Carregar .xlsx (notas)",
+            tooltip="COLUNAS OBRIGATÓRIAS:\n"
+                    "•	numero_nota_fiscal → número da nota fiscal\n"
+                    "•	codigo_produto → identificador do produto\n"
+                    "•	descricao_produto → descrição/nome do produto\n"
+                    "•	quantidade_produto → quantidade vendida\n"
+                    "•	valor_unitario → preço unitário\n"
+                    "•	preco_custo → custo do produto\n",
             disabled=True,
             on_click=lambda e: self.pick_notas(e),
         )
@@ -379,7 +387,7 @@ class AtualizacaoComponent(ft.Column):
                 shadow=ft.BoxShadow(blur_radius=4, color=ft.Colors.BLUE_100, offset=ft.Offset(2, 2)),                
                 expand=True,
                 height=140,
-                width=600,
+                width=680,
             )
         ]
 
@@ -545,6 +553,8 @@ class AtualizacaoComponent(ft.Column):
         finally:
             # Após processamento, desabilita todos os botões exceto "Liberar"
             self.liberar_controles()
+            if hasattr(self, "atualizar_conexao"):
+                self.atualizar_conexao()
             try:
                 self.update()
             except Exception:

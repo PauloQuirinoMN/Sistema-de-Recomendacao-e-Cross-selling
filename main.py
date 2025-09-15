@@ -90,6 +90,28 @@ def main(page: ft.Page):
         page.add(ft.Text(f"Erro ao criar engine SQLAlchemy: {e}", color=ft.Colors.RED))
         return
 
+    # CONEXÃO COM BANCO
+    def conectar_banco():
+        try:
+            return psycopg2.connect(**DB_CONFIG)
+        except Exception as e:
+            page.add(ft.Text(f"Erro ao conectar com psycopg2: {e}", color=ft.Colors.RED))
+            return None
+
+    conn = conectar_banco()
+
+    def atualizar_conexao():
+        nonlocal conn
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+        conn = conectar_banco()
+
+    componente_atualizacao = AtualizacaoComponent(conn_str, page)
+    componente_atualizacao.atualizar_conexao = atualizar_conexao
+
     # ---------------- CONTAINERS DINÂMICOS ----------------
     resultado_pesquisa = ft.Container()
     recomendacao_ui = ft.Container()
@@ -140,8 +162,9 @@ def main(page: ft.Page):
                 cur.execute(sql_prod, (codigo,))
                 prod_row = cur.fetchone()
         except Exception as ex:
-            resultado_pesquisa.content = ft.Text(f"Erro ao consultar o banco: {ex}")
+            resultado_pesquisa.content = ft.Text(f"Erro ao consultar o banco: Certifique-se de que as tabelas existem e estão carregadas.")
             page.update()
+            print("Erro ao consultar o banco:", ex)
             return
 
         if not prod_row:
@@ -194,7 +217,7 @@ def main(page: ft.Page):
                 size=16
             ),
         ])
-
+        
         # ------------------- SUBSTITUTOS -------------------
         substitutos = RecomendadorSubstitutoDB(engine, int(campo_pesquisar.value))
         df_subs = substitutos.recomendar_substitutos(n=3)

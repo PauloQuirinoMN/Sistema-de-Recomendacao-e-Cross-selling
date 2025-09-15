@@ -1,7 +1,6 @@
 import pandas as pd
 import time
 from data_utils import normalize_columns, map_columns_by_candidates
-from typing import List
 from capturar_log import LogCapture
 
 
@@ -82,13 +81,16 @@ class EstoqueCleaner:
             # Logar erro e interromper
             if self.logger:
                 self.logger.log(f"❌ Erro ao processar arquivo de estoque (.xlsx): {e}")
+                time.sleep(3)
                 self.logger.log("🔄 Por favor, corrija o arquivo e selecione novamente.")
+                time.sleep(3)
             else:
                 print(f"❌ Erro ao processar arquivo de estoque (.xlsx): {e}")
+                time.sleep(3)
 
             # limpar caminhos para forçar reenvio
             self.arquivo_estoque = None
             self.arquivo_notas = None
 
-            time.sleep(5)
+            time.sleep(3)
             raise

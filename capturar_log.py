@@ -1,4 +1,3 @@
-# capturar_log.py
 import time
 
 class LogCapture:
