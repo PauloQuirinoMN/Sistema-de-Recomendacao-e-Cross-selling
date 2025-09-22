@@ -1,4 +1,8 @@
  
+## 📄 Documentação
+
+Para mais detalhes técnicos e explicações, consulte a [documentação completa](https://drive.google.com/file/d/1IwjkD0daTw--BlCcpvW6RBvXK4uenmxx/view?usp=drive_link).
+
 # Sistema de Recomendação de Produtos -- MVP v1.0
 
 Sistema desenvolvido em Python para fornecer recomendações de produtos em vendas, com foco em **substitutos** (produtos similares) e **associados** (cross-selling). O sistema analisa dados de estoque e notas fiscais, gera regras de associação e apresenta uma interface gráfica interativa.
