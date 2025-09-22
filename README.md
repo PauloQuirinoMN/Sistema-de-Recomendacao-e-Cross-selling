@@ -1,3 +1,4 @@
+ 
 # Sistema de Recomendação de Produtos -- MVP v1.0
 
 Sistema desenvolvido em Python para fornecer recomendações de produtos em vendas, com foco em **substitutos** (produtos similares) e **associados** (cross-selling). O sistema analisa dados de estoque e notas fiscais, gera regras de associação e apresenta uma interface gráfica interativa.
