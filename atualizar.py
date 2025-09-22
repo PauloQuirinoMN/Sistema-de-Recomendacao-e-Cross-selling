@@ -151,14 +151,25 @@ class _FileHandler:
         self.parent._verificar_pronto()
         self.parent.update()
 
+
     def copy_to_bases(self, src_estoque: str, src_notas: str) -> tuple[str, str]:
         bases = os.path.join(os.getcwd(), "bases")
         os.makedirs(bases, exist_ok=True)
         dst_estoque = os.path.join(bases, "relatorio_produtos.xlsx")
         dst_notas = os.path.join(bases, "relatorio_notas.xlsx")
-        shutil.copy2(src_estoque, dst_estoque)
-        shutil.copy2(src_notas, dst_notas)
+
+        def safe_copy(src, dst):
+            tmp = dst + ".tmp"
+            # copia para arquivo temporário
+            shutil.copyfile(src, tmp)
+            # substitui de forma atômica (garante overwrite)
+            os.replace(tmp, dst)
+
+        safe_copy(src_estoque, dst_estoque)
+        safe_copy(src_notas, dst_notas)
+
         return dst_estoque, dst_notas
+
 
 
 class _WorkerCoordinator:
@@ -403,6 +414,7 @@ class AtualizacaoComponent(ft.Column):
                 self.attach_to_page(self.page)
             except Exception:
                 pass
+            
     def update_last_log(self, message: str):
         # chamado automaticamente pelo logger
         self.txt_ultima.value = message
