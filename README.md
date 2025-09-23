@@ -1,7 +1,7 @@
  
 ## 📄 Documentação
 
-Para mais detalhes técnicos e explicações, consulte a [documentação completa](https://drive.google.com/file/d/1IwjkD0daTw--BlCcpvW6RBvXK4uenmxx/view?usp=drive_link).
+Para mais detalhes técnicos e explicações, consulte a [documentação completa](https://drive.google.com/file/d/1IwjkD0daTw--BlCcpvW6RBvXK4uenmxx/view?usp=sharing).
 
 # Sistema de Recomendação de Produtos -- MVP v1.0
 
